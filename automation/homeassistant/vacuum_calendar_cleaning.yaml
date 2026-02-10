@@ -1,0 +1,75 @@
+blueprint:
+  name: Calendar-Based Vacuum with Task Check
+  description: >
+    Starts a vacuum script based on a calendar event, but only if a specific 
+    maintenance task is not present on your To-Do list.
+  domain: automation
+  input:
+    calendar_entity:
+      name: Calendar
+      selector:
+        entity:
+          domain: calendar
+    calendar_summary_match:
+      name: Event Summary Filter
+      default: "eg auto cleaning"
+    todo_entity:
+      name: To-Do List
+      selector:
+        entity:
+          domain: todo
+    todo_search_term:
+      name: To-Do Search Term
+      default: "clean eg robot"
+    room_boolean_ids:
+      name: Room IDs
+      description: "List of numbers corresponding to your room booleans"
+      default: [1, 2, 3]
+      selector:
+        object:
+    cleaning_script:
+      name: Cleaning Script
+      selector:
+        entity:
+          domain: script
+
+# Variables allow us to use !input values inside Jinja2 templates
+variables:
+  room_ids: !input room_boolean_ids
+  summary_filter: !input calendar_summary_match
+
+trigger:
+  - platform: calendar
+    event: start
+    offset: "00:00:00"
+    entity_id: !input calendar_entity
+
+condition:
+  # Only continue if the calendar event title contains our search term (case-insensitive)
+  - condition: template
+    value_template: "{{ (trigger.calendar_event.summary | lower).find(summary_filter | lower) != -1 }}"
+
+action:
+  # Calls a helper script to check if a specific task exists on the To-Do list
+  # The script must return a response_variable (available in HA 2023.7+)
+  - action: script.to_do_item_checker
+    data:
+      search_term: !input todo_search_term
+      target_list: !input todo_entity
+    response_variable: robot_task_check
+
+  # Execution logic: Only proceed if the maintenance task was NOT found
+  - if:
+      - condition: template
+        value_template: "{{ not robot_task_check.exists }}"
+    then:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.cleaning_type_selector
+        data:
+          option: Vacuum and Mop
+
+      # Step 3: Run the user-defined cleaning script
+      - action: !input cleaning_script
+
+mode: single

@@ -1,0 +1,125 @@
+blueprint:
+  name: Dreame Vacuum - Advanced Discovery with Currently Cleaned Tracking
+  description: >
+    Finds all hardware and software entities via Device ID and Regex. 
+    Configures cleaning parameters and starts the vacuum for the defined queue.
+
+    ### Search Regex List:
+    - **Rooms Queue (Text):** `^input_text\..*_rooms_to_clean$`
+    - **Cleaning Type (Select):** `^input_select\..*_cleaning_type$`
+    - **CleanGenius (Select):** `^select\..*_cleangenius$`
+    - **Cleaning Mode (Select):** `^select\..*_cleaning_mode$`
+
+    ### Data Format Requirements:
+    - **Queue Text Helper:** Expects a comma-separated list of integers (segment IDs). 
+      *Example:* `1,4,2` or `[1,4,2]`. The script automatically strips spaces and brackets.
+    - **Cleaning Type:** Expects an [input_select](https://www.home-assistant.io) with options: `vacuum`, `vacuum and mop`, or `deep clean`.
+    - **Device Association:** All helpers **must** be assigned to the same **Device** as the vacuum robot in [Home Assistant Device Settings](https://www.home-assistant.io).
+
+  domain: script
+  input:
+    vacuum_entity:
+      name: Vacuum Robot
+      selector:
+        entity:
+          domain: vacuum
+          integration: dreame_vacuum
+
+sequence:
+  - variables:
+      # MUST map !input to a variable name to use it inside Jinja templates
+      vacuum_ent: !input vacuum_entity
+
+  - variables:
+      # 1. IDENTIFY DEVICE & ENTITIES
+      # Merge entities from the vacuum's Device + any entities with the provided label
+      dev_entities: "{{ (device_entities(device_id(vacuum_ent)) + labels(vacuum_ent) | map('label_entities') | sum(start=[])) | unique | list }}"
+
+      # 2. DYNAMIC ENTITY DISCOVERY VIA REGEX
+      # Domain + Wildcard + Specific Suffix
+      text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
+      clean_type_select: "{{ dev_entities | select('match', '^input_select\\..*_cleaning_type$') | first | default('none') }}"
+      genie_select: "{{ dev_entities | select('match', '^select\\..*_cleangenius$') | first | default('none') }}"
+      mode_select: "{{ dev_entities | select('match', '^select\\..*_cleaning_mode$') | first | default('none') }}"
+
+      # 3. ERROR CHECKING LOGIC
+      # Compiles a list of any required entities that were not found
+      missing_entities: >-
+        {% set ns = namespace(missing=[]) %}
+        {% if text_helper == 'none' %}{% set ns.missing = ns.missing + ['Rooms Text Helper (_rooms_to_clean)'] %}{% endif %}
+        {% if clean_type_select == 'none' %}{% set ns.missing = ns.missing + ['Cleaning Type Selector (_cleaning_type)'] %}{% endif %}
+        {% if genie_select == 'none' %}{% set ns.missing = ns.missing + ['CleanGenius Select (_cleangenius)'] %}{% endif %}
+        {% if mode_select == 'none' %}{% set ns.missing = ns.missing + ['Cleaning Mode Select (_cleaning_mode)'] %}{% endif %}
+        {{ ns.missing | join(', ') }}
+
+  # 4. STOP & NOTIFY IF ENTITIES ARE MISSING
+  - if:
+      - condition: template
+        value_template: "{{ missing_entities | length > 0 }}"
+    then:
+      - action: notify.persistent_notification
+        data:
+          title: "Vacuum Script Error - Detailed Debug Info"
+          message: |
+            Discovery failed for: {{ missing_entities }}
+            ---
+            Ensure helpers match naming convention (*_rooms_to_clean, *_cleaning_type, *_cleangenius, *_cleaning_mode) and are labeled correctly.
+      - stop: "Required entities missing"
+
+  # 5. PARSE QUEUE STRING
+  - variables:
+      current_queue: >-
+        {% set val = states(text_helper) %}
+        {% if val not in ['unknown', 'unavailable'] %}
+          {% set raw = val | replace('[', '') | replace(']', '') | replace(' ', '') %}
+          {{ raw.split(',') | map('int', 0) | select('gt', 0) | list }}
+        {% else %}
+          []
+        {% endif %}
+
+  # 6. STOP IF QUEUE IS EMPTY
+  - condition: template
+    value_template: "{{ current_queue | length > 0 }}"
+
+  # 7. CONFIGURE CLEANING PARAMETERS
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ states(clean_type_select) | lower == 'vacuum and mop' }}"
+        sequence:
+          - action: select.select_option
+            target:
+              entity_id: "{{ genie_select }}"
+            data:
+              option: routine_cleaning
+      - conditions:
+          - condition: template
+            value_template: "{{ states(clean_type_select) | lower == 'deep clean' }}"
+        sequence:
+          - action: select.select_option
+            target:
+              entity_id: "{{ genie_select }}"
+            data:
+              option: deep_cleaning
+    default:
+      - action: select.select_option
+        target:
+          entity_id: "{{ genie_select }}"
+        data:
+          option: "off"
+      - action: select.select_option
+        target:
+          entity_id: "{{ mode_select }}"
+        data:
+          option: "{{ 'sweeping' if states(clean_type_select) | lower == 'vacuum' else 'mopping' }}"
+
+  - delay: "00:00:01"
+
+  # 8. START CLEANING
+  - action: dreame_vacuum.vacuum_clean_segment
+    target:
+      entity_id: !input vacuum_entity
+    data:
+      segments: "{{ current_queue }}"
+
+mode: single
