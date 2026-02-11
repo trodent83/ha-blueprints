@@ -5,6 +5,12 @@ blueprint:
     maintenance task is not present on your To-Do list.
   domain: automation
   input:
+    vacuum_entity:
+      name: Vacuum Robot
+      selector:
+        entity:
+          domain: vacuum
+          integration: dreame_vacuum
     calendar_entity:
       name: Calendar
       selector:
@@ -21,21 +27,28 @@ blueprint:
     todo_search_term:
       name: To-Do Search Term
       default: "clean eg robot"
-    room_boolean_ids:
-      name: Room IDs
-      description: "List of numbers corresponding to your room booleans"
-      default: [1, 2, 3]
-      selector:
-        object:
     cleaning_script:
       name: Cleaning Script
       selector:
         entity:
           domain: script
+    ignore_rooms:
+      name: Ignored Rooms
+      description: "List of room IDs to exclude from cleaning (e.g. [1, 5])"
+      default: []
+      selector:
+        object:
 
-# Variables allow us to use !input values inside Jinja2 templates
 variables:
-  room_ids: !input room_boolean_ids
+  vacuum_ent: !input vacuum_entity
+  dev_id: "{{ device_id(vacuum_ent) }}"
+  dev_entities: >-
+    {% set all_labels = (labels(vacuum_ent)) | unique %}
+    {% set labeled_entities = all_labels | map('label_entities') | sum(start=[]) %}
+    {{ (device_entities(dev_id) + labeled_entities) | unique | list }}
+  text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
+  ignored_rooms: !input ignore_rooms
+  cleaning_sequence: "{{ state_attr(vacuum_ent, 'cleaning_sequence') | default([], true) | reject('in', ignored_rooms) | list }}"
   summary_filter: !input calendar_summary_match
 
 trigger:
@@ -63,6 +76,16 @@ action:
       - condition: template
         value_template: "{{ not robot_task_check.exists }}"
     then:
+      # Populate the rooms_to_clean helper with the vacuum's cleaning sequence
+      - if:
+          - condition: template
+            value_template: "{{ text_helper != 'none' and cleaning_sequence is not none }}"
+        then:
+          - action: input_text.set_value
+            target:
+              entity_id: "{{ text_helper }}"
+            data:
+              value: "{{ cleaning_sequence | to_json }}"
       - action: input_select.select_option
         target:
           entity_id: input_select.cleaning_type_selector
