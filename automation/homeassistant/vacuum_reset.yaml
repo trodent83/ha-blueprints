@@ -31,7 +31,7 @@ trigger:
     event_type: dreame_vacuum_task_status
     event_data:
       entity_id: !input vacuum_entity
-      completed: true
+      task_status_name: completed
 
 
 variables:
