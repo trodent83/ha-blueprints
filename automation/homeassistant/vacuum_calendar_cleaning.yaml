@@ -38,6 +38,13 @@ blueprint:
       default: []
       selector:
         object:
+    cleaning_mode_select:
+      name: Cleaning Mode Selector
+      description: Input select to set to 'Vacuum and Mop' before cleaning.
+      default: input_select.cleaning_type_selector
+      selector:
+        entity:
+          domain: input_select
 
 variables:
   vacuum_ent: !input vacuum_entity
@@ -51,16 +58,16 @@ variables:
   cleaning_sequence: "{{ state_attr(vacuum_ent, 'cleaning_sequence') | default([], true) | reject('in', ignored_rooms) | list }}"
   summary_filter: !input calendar_summary_match
 
-trigger:
-  - platform: calendar
-    event: start
-    offset: "00:00:00"
+triggers:
+  - event: start
+    offset: "0:0:0"
     entity_id: !input calendar_entity
+    trigger: calendar
 
 condition:
   # Only continue if the calendar event title contains our search term (case-insensitive)
   - condition: template
-    value_template: "{{ (trigger.calendar_event.summary | lower).find(summary_filter | lower) != -1 }}"
+    value_template: "{{ (summary_filter | trim | lower) in (trigger.calendar_event.summary | lower) }}"
 
 action:
   # Calls a helper script to check if a specific task exists on the To-Do list
@@ -89,6 +96,7 @@ action:
       - action: input_select.select_option
         target:
           entity_id: input_select.cleaning_type_selector
+          entity_id: !input cleaning_mode_select
         data:
           option: Vacuum and Mop
 

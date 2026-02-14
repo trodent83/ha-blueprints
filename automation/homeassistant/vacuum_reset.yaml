@@ -1,5 +1,6 @@
 blueprint:
   name: Dreame Vacuum - Reset and Notify
+  description: Resets helpers, creates a To-Do, and clears specific vacuum notifications when finished.
   domain: automation
   input:
     vacuum_entity:
@@ -26,26 +27,32 @@ blueprint:
 
 mode: single
 
-trigger:
-  - platform: event
+triggers:
+  # Listens for the specific completion event from the Dreame integration
+  - trigger: event
     event_type: dreame_vacuum_task_status
     event_data:
+      # Narrows the event down to the specific robot selected in the blueprint
       entity_id: !input vacuum_entity
-      task_status_name: completed
-
+      completed: true
 
 variables:
   vacuum_ent: !input vacuum_entity
   dev_id: "{{ device_id(vacuum_ent) }}"
+  # Extracts the MAC address from attributes to match the dismissal ID format
+  mac_addr: "{{ state_attr(vacuum_ent, 'mac_address') }}"
+  
+  # Logic to find helper entities associated with the device (via labels or ID)
   dev_entities: >-
     {% set all_labels = (labels(vacuum_ent)) | unique %}
     {% set labeled_entities = all_labels | map('label_entities') | sum(start=[]) %}
     {{ (device_entities(dev_id) + labeled_entities) | unique | list }}
+  
   text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
   currently_cleaned_helper: "{{ dev_entities | select('match', '^input_number\\..*_currently_cleaned$') | first | default('none') }}"
 
 action:
-  # Safety check: Only try to clear the queue if the helper was found
+  # 1. Reset the Text Helper (Clear the room queue)
   - if:
       - condition: template
         value_template: "{{ text_helper != 'none' }}"
@@ -56,6 +63,7 @@ action:
         data:
           value: "[]"
 
+  # 2. Reset the Counter Helper (Currently cleaned rooms)
   - if:
       - condition: template
         value_template: "{{ currently_cleaned_helper != 'none' }}"
@@ -66,6 +74,7 @@ action:
         data:
           value: 0
 
+  # 3. Create a To-Do item for maintenance
   - action: todo.get_items
     target:
       entity_id: !input todo_list
@@ -78,6 +87,7 @@ action:
       heading: !input todo_header_text
       body: Replace water and clean the robot
 
+  # 4. Execute your custom notification script
   - action: script.turn_on
     target:
       entity_id: !input notify_script
@@ -85,10 +95,13 @@ action:
       variables:
         message: "The vacuum has finished cleaning and is back at the dock. Please remember to clean the robot and replace the water."
 
-  # Dismiss persistent notifications from the integration
+  # 5. Dismiss the integration's persistent notifications
+  # This targets the specific notification ID you provided in your first message
   - action: persistent_notification.dismiss
     data:
-      notification_id: "dreame_vacuum_notification"
+      notification_id: "dreame_vacuum_{{ mac_addr }}_cleanup_completed"
+  
+  # Fallback dismissals for other common Dreame ID formats
   - action: persistent_notification.dismiss
     data:
       notification_id: "dreame_vacuum_{{ dev_id }}"

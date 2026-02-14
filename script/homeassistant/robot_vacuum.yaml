@@ -40,7 +40,12 @@ sequence:
       text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
       clean_type_select: "{{ dev_entities | select('match', '^input_select\\..*_cleaning_type$') | first | default('none') }}"
       genie_select: "{{ dev_entities | select('match', '^select\\..*_cleangenius$') | first | default('none') }}"
-      mode_select: "{{ dev_entities | select('match', '^select\\..*_cleaning_mode$') | first | default('none') }}"
+      mode_select: >-
+        {{ dev_entities 
+          | select('match', '^select\\..*_cleaning_mode$') 
+          | reject('search', 'room_') 
+          | first | default('none') 
+        }}
 
       # 3. ERROR CHECKING LOGIC
       # Compiles a list of any required entities that were not found
