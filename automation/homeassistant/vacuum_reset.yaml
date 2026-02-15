@@ -32,12 +32,10 @@ triggers:
   - trigger: event
     event_type: dreame_vacuum_task_status
     event_data:
-      # Narrows the event down to the specific robot selected in the blueprint
-      entity_id: !input vacuum_entity
       completed: true
 
 variables:
-  vacuum_ent: !input vacuum_entity
+  vacuum_ent: !input vacuum_entity 
   dev_id: "{{ device_id(vacuum_ent) }}"
   # Extracts the MAC address from attributes to match the dismissal ID format
   mac_addr: "{{ state_attr(vacuum_ent, 'mac_address') }}"
@@ -50,6 +48,11 @@ variables:
   
   text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
   currently_cleaned_helper: "{{ dev_entities | select('match', '^input_number\\..*_currently_cleaned$') | first | default('none') }}"
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ trigger.event.data.entity_id.startswith(vacuum_ent) }}
 
 action:
   # 1. Reset the Text Helper (Clear the room queue)
@@ -94,14 +97,3 @@ action:
     data:
       variables:
         message: "The vacuum has finished cleaning and is back at the dock. Please remember to clean the robot and replace the water."
-
-  # 5. Dismiss the integration's persistent notifications
-  # This targets the specific notification ID you provided in your first message
-  - action: persistent_notification.dismiss
-    data:
-      notification_id: "dreame_vacuum_{{ mac_addr }}_cleanup_completed"
-  
-  # Fallback dismissals for other common Dreame ID formats
-  - action: persistent_notification.dismiss
-    data:
-      notification_id: "dreame_vacuum_{{ dev_id }}"
