@@ -45,6 +45,17 @@ blueprint:
       selector:
         entity:
           domain: input_select
+    cleaning_mode_option:
+      name: Cleaning Mode
+      description: The cleaning mode to set on the selector (e.g., Vacuum and Mop).
+      default: "Vacuum and Mop"
+      selector:
+        select:
+          options:
+            - "Vacuum"
+            - "Mop"
+            - "Vacuum and Mop"
+            - "Deep Clean"
 
 variables:
   vacuum_ent: !input vacuum_entity
@@ -95,10 +106,9 @@ action:
               value: "{{ cleaning_sequence | to_json }}"
       - action: input_select.select_option
         target:
-          entity_id: input_select.cleaning_type_selector
           entity_id: !input cleaning_mode_select
         data:
-          option: Vacuum and Mop
+          option: !input cleaning_mode_option
 
       # Step 3: Run the user-defined cleaning script
       - action: !input cleaning_script
