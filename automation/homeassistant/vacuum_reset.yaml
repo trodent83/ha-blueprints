@@ -24,7 +24,8 @@ blueprint:
         text:
     notification_script:
       name: Notification Script
-      description: "The notification script to run when the cleaning cycle completes. Receives a 'message' variable."
+      description: "Optional script to run when the cleaning cycle completes. Receives a 'message' variable."
+      default: ""
       selector:
         entity:
           domain: script
@@ -94,10 +95,14 @@ action:
       heading: !input todo_title
       body: Replace water and clean the robot
 
-  # Run the custom notification script to alert the user
-  - action: script.turn_on
-    target:
-      entity_id: !input notification_script
-    data:
-      variables:
-        message: "The vacuum has finished cleaning and is back at the dock. Please remember to clean the robot and replace the water."
+  # Run the custom notification script to alert the user if configured
+  - if:
+      - condition: template
+        value_template: "{{ notification_script != '' }}"
+    then:
+      - action: script.turn_on
+        target:
+          entity_id: !input notification_script
+        data:
+          variables:
+            message: "The vacuum has finished cleaning and is back at the dock. Please remember to clean the robot and replace the water."

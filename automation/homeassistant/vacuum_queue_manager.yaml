@@ -72,7 +72,7 @@ action:
       - condition: template
         value_template: "{{ queue_text_helper == 'none' or currently_cleaned_helper == 'none' }}"
     then:
-      - service: persistent_notification.create
+      - action: persistent_notification.create
         data:
           title: "Vacuum Queue Manager Error"
           message: "Helpers not found for device {{ dev_id }}. Text: {{ queue_text_helper }}, Number: {{ currently_cleaned_helper }}."
@@ -120,10 +120,13 @@ action:
           - condition: template
             value_template: "{{ notification_script != '' and skipped_rooms | length > 0 }}"
         then:
-          - service: !input notification_script
+          - action: script.turn_on
+            target:
+              entity_id: !input notification_script
             data:
-              message: "The vacuum has finished, but skipped the following rooms: {{ skipped_rooms | join(', ') }}"
-      - service: input_text.set_value
+              variables:
+                message: "The vacuum has finished, but skipped the following rooms: {{ skipped_rooms | join(', ') }}"
+      - action: input_text.set_value
         target: { entity_id: "{{ queue_text_helper }}" }
         data: { value: "[]" }
       - stop: "Cleaning cycle ended prematurely. Cleared remaining queue."
@@ -133,7 +136,7 @@ action:
       - condition: template
         value_template: "{{ current_queue | length == 0 and states(queue_text_helper) not in ['unknown', 'unavailable', '', '[]'] }}"
     then:
-      - service: persistent_notification.create
+      - action: persistent_notification.create
         data:
           title: "Vacuum Queue Parsing Error"
           message: "Queue empty but input was: '{{ states(queue_text_helper) }}'. Check format."
@@ -150,13 +153,13 @@ action:
             value_template: "{{ active_segment == current_queue[0] }}"
         sequence:
           # Update the currently cleaned room helper with the active segment ID
-          - service: input_number.set_value
+          - action: input_number.set_value
             target:
               entity_id: "{{ currently_cleaned_helper }}"
             data:
               value: "{{ active_segment }}"
           # Remove the active segment ID from the front of the queue
-          - service: input_text.set_value
+          - action: input_text.set_value
             target:
               entity_id: "{{ queue_text_helper }}"
             data:
@@ -187,16 +190,19 @@ action:
               - condition: template
                 value_template: "{{ notification_script != '' and skipped_rooms | length > 0 }}"
             then:
-              - service: !input notification_script
+              - action: script.turn_on
+                target:
+                  entity_id: !input notification_script
                 data:
-                  message: "The vacuum skipped the following rooms: {{ skipped_rooms | join(', ') }}"
-          - service: input_number.set_value
+                  variables:
+                    message: "The vacuum skipped the following rooms: {{ skipped_rooms | join(', ') }}"
+          - action: input_number.set_value
             target:
               entity_id: "{{ currently_cleaned_helper }}"
             data:
               value: "{{ active_segment }}"
           # Fast-forward the queue, removing the current and all skipped room IDs
-          - service: input_text.set_value
+          - action: input_text.set_value
             target:
               entity_id: "{{ queue_text_helper }}"
             data:
