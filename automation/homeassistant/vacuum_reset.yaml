@@ -5,22 +5,26 @@ blueprint:
   input:
     vacuum_entity:
       name: Vacuum Robot
+      description: "The Dreame vacuum robot entity. This device must also be assigned the helper entities (queue, current segment, etc.) for dynamic discovery to work."
       selector:
         entity:
           domain: vacuum
           integration: dreame_vacuum
     todo_list:
       name: To-Do List
+      description: "The To-Do list to query and add maintenance tasks to when cleaning completes."
       selector:
         entity:
           domain: todo
-    todo_header_text:
-      name: To-Do Header Text
+    todo_title:
+      name: To-Do Item Title
+      description: "The header/title of the maintenance task created on your To-Do list."
       default: "Robot Cleaning"
       selector:
         text:
-    notify_script:
+    notification_script:
       name: Notification Script
+      description: "The notification script to run when the cleaning cycle completes. Receives a 'message' variable."
       selector:
         entity:
           domain: script
@@ -28,7 +32,7 @@ blueprint:
 mode: single
 
 triggers:
-  # Listens for the specific completion event from the Dreame integration
+  # Listen for the task status event from the Dreame integration
   - trigger: event
     event_type: dreame_vacuum_task_status
     event_data:
@@ -37,36 +41,36 @@ triggers:
 variables:
   vacuum_ent: !input vacuum_entity 
   dev_id: "{{ device_id(vacuum_ent) }}"
-  # Extracts the MAC address from attributes to match the dismissal ID format
+  # Extract the MAC address from attributes to match the dismissal ID format
   mac_addr: "{{ state_attr(vacuum_ent, 'mac_address') }}"
   
-  # Logic to find helper entities associated with the device (via labels or ID)
+  # Find helper entities associated with the device dynamically via labels or device ID
   dev_entities: >-
     {% set all_labels = (labels(vacuum_ent)) | unique %}
     {% set labeled_entities = all_labels | map('label_entities') | sum(start=[]) %}
     {{ (device_entities(dev_id) + labeled_entities) | unique | list }}
   
-  text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
+  queue_text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
   currently_cleaned_helper: "{{ dev_entities | select('match', '^input_number\\..*_currently_cleaned$') | first | default('none') }}"
 
-conditions:
+condition:
   - condition: template
     value_template: >-
-      {{ trigger.event.data.entity_id.startswith(vacuum_ent) }}
+      {{ trigger.event.data.entity_id == vacuum_ent }}
 
 action:
-  # 1. Reset the Text Helper (Clear the room queue)
+  # Reset the rooms to clean helper to empty the queue
   - if:
       - condition: template
-        value_template: "{{ text_helper != 'none' }}"
+        value_template: "{{ queue_text_helper != 'none' }}"
     then:
       - action: input_text.set_value
         target:
-          entity_id: "{{ text_helper }}"
+          entity_id: "{{ queue_text_helper }}"
         data:
           value: "[]"
 
-  # 2. Reset the Counter Helper (Currently cleaned rooms)
+  # Reset the currently cleaned room helper counter
   - if:
       - condition: template
         value_template: "{{ currently_cleaned_helper != 'none' }}"
@@ -77,7 +81,7 @@ action:
         data:
           value: 0
 
-  # 3. Create a To-Do item for maintenance
+  # Retrieve active items on the To-Do list to avoid duplicate creation
   - action: todo.get_items
     target:
       entity_id: !input todo_list
@@ -87,13 +91,13 @@ action:
 
   - action: script.conditional_to_do_creator
     data:
-      heading: !input todo_header_text
+      heading: !input todo_title
       body: Replace water and clean the robot
 
-  # 4. Execute your custom notification script
+  # Run the custom notification script to alert the user
   - action: script.turn_on
     target:
-      entity_id: !input notify_script
+      entity_id: !input notification_script
     data:
       variables:
         message: "The vacuum has finished cleaning and is back at the dock. Please remember to clean the robot and replace the water."

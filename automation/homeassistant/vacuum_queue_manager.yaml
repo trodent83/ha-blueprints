@@ -15,25 +15,40 @@ blueprint:
   input:
     vacuum_entity:
       name: Vacuum Robot
+      description: "The Dreame vacuum robot entity. This device must also be assigned the helper entities (queue, current segment, etc.) for dynamic discovery to work."
       selector:
         entity:
           domain: vacuum
           integration: dreame_vacuum
     corridor_rooms:
       name: Corridor Rooms
-      description: "Comma-separated list of room IDs that the vacuum passes through but shouldn't affect the queue (e.g. 1,5 or [1, 5])"
+      description: "Comma-separated list of room IDs that the vacuum passes through but shouldn't affect the queue (e.g., 1,5 or [1, 5])."
       default: ""
       selector:
         text:
     notification_script:
       name: Notification Script
-      description: "Optional script to call when a room is skipped. The script will be called with a 'message' variable."
+      description: "Optional script to call when a room is skipped or the cleaning cycle ends prematurely. The script will be called with a 'message' variable."
       default: ""
       selector:
         entity:
           domain: script
 
 mode: single
+
+variables:
+  # Identify device and entities associated with the vacuum
+  vacuum_ent: !input vacuum_entity
+  dev_id: "{{ device_id(vacuum_ent) }}"
+  dev_entities: >-
+    {% set all_labels = (labels(vacuum_ent)) | unique %}
+    {% set labeled_entities = all_labels | map('label_entities') | sum(start=[]) %}
+    {{ (device_entities(dev_id) + labeled_entities) | unique | list }}
+
+  # Discover helper entities dynamically using naming pattern matches
+  queue_text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
+  currently_cleaned_helper: "{{ dev_entities | select('match', '^input_number\\..*_currently_cleaned$') | first | default('none') }}"
+  corridor_rooms_input: !input corridor_rooms
 
 # 1. TRIGGER: Specifically watching for undocking and segment transitions
 trigger:
@@ -48,39 +63,25 @@ trigger:
 condition:
   - condition: template
     value_template: >-
-      {% set vacuum_state = state_attr('!input vacuum_entity', 'vacuum_state') %}
+      {% set vacuum_state = state_attr(vacuum_ent, 'vacuum_state') %}
       {{ vacuum_state not in ['washing', 'returning_to_wash', 'drying'] }}
 
-variables:
-  # 2. IDENTIFY DEVICE & ENTITIES
-  vacuum_ent: !input vacuum_entity
-  dev_id: "{{ device_id(vacuum_ent) }}"
-  dev_entities: >-
-    {% set all_labels = (labels(vacuum_ent)) | unique %}
-    {% set labeled_entities = all_labels | map('label_entities') | sum(start=[]) %}
-    {{ (device_entities(dev_id) + labeled_entities) | unique | list }}
-
-  # 3. DYNAMIC ENTITY DISCOVERY
-  text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
-  currently_cleaned_helper: "{{ dev_entities | select('match', '^input_number\\..*_currently_cleaned$') | first | default('none') }}"
-  corridor_rooms_input: !input corridor_rooms
-
 action:
-  # Check Step 3: Notify if helpers are missing
+  # Notify if required helper entities are missing
   - if:
       - condition: template
-        value_template: "{{ text_helper == 'none' or currently_cleaned_helper == 'none' }}"
+        value_template: "{{ queue_text_helper == 'none' or currently_cleaned_helper == 'none' }}"
     then:
       - service: persistent_notification.create
         data:
           title: "Vacuum Queue Manager Error"
-          message: "Helpers not found for device {{ dev_id }}. Text: {{ text_helper }}, Number: {{ currently_cleaned_helper }}."
+          message: "Helpers not found for device {{ dev_id }}. Text: {{ queue_text_helper }}, Number: {{ currently_cleaned_helper }}."
       - stop: "Required helpers missing"
 
   - variables:
-      # 4. PARSE CURRENT QUEUE
+      # Parse current room queue from the helper text state
       current_queue: >-
-        {% set val = states(text_helper) %}
+        {% set val = states(queue_text_helper) %}
         {% if val not in ['unknown', 'unavailable', ''] %}
           {% set raw = val | replace('[', '') | replace(']', '') | replace(' ', '') %}
           {{ raw.split(',') | map('int', 0) | select('gt', 0) | list }}
@@ -95,10 +96,10 @@ action:
         {% else %}
           []
         {% endif %}
-      # 5. GET ACTIVE SEGMENT FROM ATTRIBUTE
+      # Get the segment currently being cleaned from the vacuum attributes
       active_segment: "{{ state_attr(vacuum_ent, 'current_segment') | int(0) }}"
 
-  # NEW: Handle premature end of cleaning cycle
+  # Handle premature end of the cleaning cycle (clear queue and notify)
   - if:
       - condition: template
         value_template: >
@@ -112,7 +113,8 @@ action:
           skipped_rooms: >
             {% set skipped_ids = current_queue | map('int') | list %}
             {% set map_name = state_attr(vacuum_ent, 'selected_map') %}
-            {% set all_rooms = state_attr(vacuum_ent, 'rooms')[map_name] | default([]) %}
+            {% set rooms_dict = state_attr(vacuum_ent, 'rooms') %}
+            {% set all_rooms = (rooms_dict.get(map_name) if rooms_dict and map_name else []) | default([]) %}
             {{ all_rooms | selectattr('id', 'in', skipped_ids) | map(attribute='name') | list }}
       - if:
           - condition: template
@@ -122,63 +124,64 @@ action:
             data:
               message: "The vacuum has finished, but skipped the following rooms: {{ skipped_rooms | join(', ') }}"
       - service: input_text.set_value
-        target: { entity_id: "{{ text_helper }}" }
+        target: { entity_id: "{{ queue_text_helper }}" }
         data: { value: "[]" }
       - stop: "Cleaning cycle ended prematurely. Cleared remaining queue."
 
-  # Check Step 4: Notify if queue parsing failed (empty result from non-empty input)
+  # Notify if the queue helper contains data but parsing fails to yield valid segment IDs
   - if:
       - condition: template
-        value_template: "{{ current_queue | length == 0 and states(text_helper) not in ['unknown', 'unavailable', '', '[]'] }}"
+        value_template: "{{ current_queue | length == 0 and states(queue_text_helper) not in ['unknown', 'unavailable', '', '[]'] }}"
     then:
       - service: persistent_notification.create
         data:
           title: "Vacuum Queue Parsing Error"
-          message: "Queue empty but input was: '{{ states(text_helper) }}'. Check format."
+          message: "Queue empty but input was: '{{ states(queue_text_helper) }}'. Check format."
 
-  # 6. STOP IF QUEUE IS EMPTY
+  # Stop execution if the room queue is empty
   - condition: template
     value_template: "{{ current_queue | length > 0 }}"
 
-  # 7. UPDATE QUEUE BASED ON ACTIVE ROOM
+  # Update the queue and tracking helpers based on the active segment
   - choose:
-      # Case 1: Robot is in the expected next room. This has top priority.
+      # Case 1: Robot is in the expected next room (highest priority)
       - conditions:
           - condition: template
             value_template: "{{ active_segment == current_queue[0] }}"
         sequence:
-          # Update the "Currently Cleaned" helper with the current segment
+          # Update the currently cleaned room helper with the active segment ID
           - service: input_number.set_value
             target:
               entity_id: "{{ currently_cleaned_helper }}"
             data:
               value: "{{ active_segment }}"
-          # Shift the queue: Remove the first item as it is now being cleaned
+          # Remove the active segment ID from the front of the queue
           - service: input_text.set_value
             target:
-              entity_id: "{{ text_helper }}"
+              entity_id: "{{ queue_text_helper }}"
             data:
               value: "[{{ current_queue[1:] | join(',') }}]"
 
-      # Case 2: Robot is in a corridor (and it's not the target room). Do nothing.
+      # Case 2: Robot is transitioning through a corridor (ignore pass-through)
       - conditions:
           - condition: template
             value_template: "{{ active_segment in parsed_corridor_rooms }}"
         sequence:
           - stop: "Robot is in a corridor room, ignoring pass-through."
 
-      # Case 3: Robot skipped rooms and is now in a room further down the queue.
+      # Case 3: Robot skipped rooms and went straight to a room further down the queue
       - conditions:
           - condition: template
             value_template: "{{ active_segment in current_queue }}"
         sequence:
-          # Update the "Currently Cleaned" helper with the current segment
+          # Calculate skipped rooms and notify if target script is configured
           - variables:
               skipped_rooms: >
                 {% set end_index = current_queue.index(active_segment) %}
                 {% set skipped_ids = current_queue[0:end_index] | map('int') | list %}
                 {% set map_name = state_attr(vacuum_ent, 'selected_map') %}
-                {% set all_rooms = state_attr(vacuum_ent, 'rooms')[map_name] | default([]) %}
+                {% set rooms_dict = state_attr(vacuum_ent, 'rooms') %}
+                {% set all_rooms = (rooms_dict.get(map_name) if rooms_dict and map_name else []) | default([]) %}
                 {{ all_rooms | selectattr('id', 'in', skipped_ids) | map(attribute='name') | list }}
           - if:
               - condition: template
@@ -192,10 +195,10 @@ action:
               entity_id: "{{ currently_cleaned_helper }}"
             data:
               value: "{{ active_segment }}"
-          # Fast-forward the queue, removing the current room and any skipped rooms.
+          # Fast-forward the queue, removing the current and all skipped room IDs
           - service: input_text.set_value
             target:
-              entity_id: "{{ text_helper }}"
+              entity_id: "{{ queue_text_helper }}"
             data:
               value: >
                 {% set start_index = current_queue.index(active_segment) + 1 %}

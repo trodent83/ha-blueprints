@@ -7,47 +7,57 @@ blueprint:
   input:
     vacuum_entity:
       name: Vacuum Robot
+      description: "The Dreame vacuum robot entity. This device must also be assigned the helper entities (queue, current segment, etc.) for dynamic discovery to work."
       selector:
         entity:
           domain: vacuum
           integration: dreame_vacuum
     calendar_entity:
       name: Calendar
+      description: "The calendar entity to monitor for cleaning schedule events."
       selector:
         entity:
           domain: calendar
     calendar_summary_match:
       name: Event Summary Filter
+      description: "Only trigger cleaning if the calendar event summary contains this search phrase (case-insensitive)."
       default: "eg auto cleaning"
-    todo_entity:
+      selector:
+        text:
+    todo_list:
       name: To-Do List
+      description: "The To-Do list to check for active maintenance tasks. If a task matching the search term is found, cleaning is skipped."
       selector:
         entity:
           domain: todo
     todo_search_term:
       name: To-Do Search Term
+      description: "The text to search for on the To-Do list (e.g., 'clean filter' or 'clean robot'). Case-insensitive."
       default: "clean eg robot"
+      selector:
+        text:
     cleaning_script:
       name: Cleaning Script
+      description: "The cleaning script to run when scheduling requirements are met (typically script.robot_vacuum)."
       selector:
         entity:
           domain: script
     ignore_rooms:
       name: Ignored Rooms
-      description: "List of room IDs to exclude from cleaning (e.g. [1, 5])"
+      description: "List of room IDs to exclude from cleaning (e.g. [1, 5])."
       default: []
       selector:
         object:
     cleaning_mode_select:
       name: Cleaning Mode Selector
-      description: Input select to set to 'Vacuum and Mop' before cleaning.
+      description: "The input select entity used to control the vacuum's cleaning mode (e.g., input_select.cleaning_type_selector)."
       default: input_select.cleaning_type_selector
       selector:
         entity:
           domain: input_select
     cleaning_mode_option:
       name: Cleaning Mode
-      description: The cleaning mode to set on the selector (e.g., Vacuum and Mop).
+      description: "The cleaning mode to set on the selector (e.g., Vacuum and Mop)."
       default: "Vacuum and Mop"
       selector:
         select:
@@ -64,7 +74,7 @@ variables:
     {% set all_labels = (labels(vacuum_ent)) | unique %}
     {% set labeled_entities = all_labels | map('label_entities') | sum(start=[]) %}
     {{ (device_entities(dev_id) + labeled_entities) | unique | list }}
-  text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
+  queue_text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
   ignored_rooms: !input ignore_rooms
   cleaning_sequence: "{{ state_attr(vacuum_ent, 'cleaning_sequence') | default([], true) | reject('in', ignored_rooms) | list }}"
   summary_filter: !input calendar_summary_match
@@ -86,10 +96,10 @@ action:
   - action: script.to_do_item_checker
     data:
       search_term: !input todo_search_term
-      target_list: !input todo_entity
+      target_list: !input todo_list
     response_variable: robot_task_check
 
-  # Execution logic: Only proceed if the maintenance task was NOT found
+  # Only proceed if the maintenance task was not found
   - if:
       - condition: template
         value_template: "{{ not robot_task_check.exists }}"
@@ -97,11 +107,11 @@ action:
       # Populate the rooms_to_clean helper with the vacuum's cleaning sequence
       - if:
           - condition: template
-            value_template: "{{ text_helper != 'none' and cleaning_sequence is not none }}"
+            value_template: "{{ queue_text_helper != 'none' and cleaning_sequence is not none }}"
         then:
           - action: input_text.set_value
             target:
-              entity_id: "{{ text_helper }}"
+              entity_id: "{{ queue_text_helper }}"
             data:
               value: "{{ cleaning_sequence | to_json }}"
       - action: input_select.select_option
@@ -110,7 +120,7 @@ action:
         data:
           option: !input cleaning_mode_option
 
-      # Step 3: Run the user-defined cleaning script
+      # Run the user-defined cleaning script
       - action: !input cleaning_script
 
 mode: single
