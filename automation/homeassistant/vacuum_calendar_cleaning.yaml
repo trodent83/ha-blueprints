@@ -51,7 +51,7 @@ blueprint:
     cleaning_mode_select:
       name: Cleaning Mode Selector
       description: "The input select entity used to control the vacuum's cleaning mode (e.g., input_select.cleaning_type_selector)."
-      default: input_select.cleaning_type_selector
+      default: input_select.eg_cleaning_type
       selector:
         entity:
           domain: input_select

@@ -62,7 +62,7 @@ sequence:
       - condition: template
         value_template: "{{ missing_entities | length > 0 }}"
     then:
-      - action: notify.persistent_notification
+      - action: persistent_notification.create
         data:
           title: "Vacuum Script Error - Detailed Debug Info"
           message: |
