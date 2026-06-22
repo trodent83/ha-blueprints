@@ -23,7 +23,7 @@ Please be polite, constructive, and respectful of other contributors. Our goal i
 
 1. **Fork the Repository:** Create your own fork of the project.
 2. **Create a Branch:** Work in a specific branch for your feature or bug fix (`git checkout -b feature/amazing-feature`).
-3. **Write/Modify Blueprints:** Add or update blueprints under `automation/homeassistant/` or `script/homeassistant/`.
+3. **Write/Modify Blueprints:** Add or update blueprints under [automation/homeassistant/](file:///d:/Ha/ha-blueprints/automation/homeassistant/) or [script/homeassistant/](file:///d:/Ha/ha-blueprints/script/homeassistant/).
 4. **Test Locally:** Import and validate your modified yaml files in your local Home Assistant instance first.
 5. **Document Changes:**
    * Update the [CHANGELOG.md](file:///d:/Ha/ha-blueprints/CHANGELOG.md) with details of your changes.
