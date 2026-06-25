@@ -51,7 +51,7 @@ graph TD
 ## 📦 Included Blueprints
 
 ### 1. 🤖 Advanced Vacuum Script
-* **Path:** [robot_vacuum.yaml](file:///d:/Ha/ha-blueprints/script/homeassistant/robot_vacuum.yaml)
+* **Path:** [robot_vacuum.yaml](script/homeassistant/robot_vacuum.yaml)
 * **Purpose:** The execution engine. Finds all necessary helper entities dynamically using the vacuum's Device ID or labels and regex matching. It sets the proper vacuum state (CleanGenius or manual sweep/mop modes) based on your target cleaning type, then initiates segment cleaning for the exact queue.
 * **Dynamic Discovery Regexes:**
   * **Rooms Queue:** `^input_text\..*_rooms_to_clean$`
@@ -60,7 +60,7 @@ graph TD
   * **Cleaning Mode Selector:** `^select\..*_cleaning_mode$`
 
 ### 2. 📅 Calendar-Based Vacuum with Task Check
-* **Path:** [vacuum_calendar_cleaning.yaml](file:///d:/Ha/ha-blueprints/automation/homeassistant/vacuum_calendar_cleaning.yaml)
+* **Path:** [vacuum_calendar_cleaning.yaml](automation/homeassistant/vacuum_calendar_cleaning.yaml)
 * **Purpose:** Triggers on a calendar event. Before scheduling, it checks if a specific maintenance task (e.g., "Clean Robot") is active on your Home Assistant To-Do list. If the task is absent:
   * It retrieves the vacuum's default cleaning sequence.
   * Filters out any ignored room IDs.
@@ -68,7 +68,7 @@ graph TD
   * Populates the room queue helper and fires the cleaning script.
 
 ### 3. 🔄 Updating the to clean list (Queue Manager)
-* **Path:** [vacuum_queue_manager.yaml](file:///d:/Ha/ha-blueprints/automation/homeassistant/vacuum_queue_manager.yaml)
+* **Path:** [vacuum_queue_manager.yaml](automation/homeassistant/vacuum_queue_manager.yaml)
 * **Purpose:** Monitors the vacuum during its run. When the vacuum transitions between segments (rooms), this automation:
   * Updates the `currently_cleaned` helper.
   * Shifts the queue text helper (removes the current room).
@@ -77,7 +77,7 @@ graph TD
   * Gracefully handles premature cancellation (e.g. if the vacuum is manually docked/paused, it clears remaining rooms and alerts you of skipped rooms).
 
 ### 4. 🧹 Reset and Notify
-* **Path:** [vacuum_reset.yaml](file:///d:/Ha/ha-blueprints/automation/homeassistant/vacuum_reset.yaml)
+* **Path:** [vacuum_reset.yaml](automation/homeassistant/vacuum_reset.yaml)
 * **Purpose:** Handles the completion of the cleaning cycle.
   * Resets the room queue and currently cleaned helpers back to `[]` and `0`.
   * Creates a To-Do list maintenance item (e.g., "Replace water and clean the robot").

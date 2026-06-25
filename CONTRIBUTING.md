@@ -23,10 +23,10 @@ Please be polite, constructive, and respectful of other contributors. Our goal i
 
 1. **Fork the Repository:** Create your own fork of the project.
 2. **Create a Branch:** Work in a specific branch for your feature or bug fix (`git checkout -b feature/amazing-feature`).
-3. **Write/Modify Blueprints:** Add or update blueprints under [automation/homeassistant/](file:///d:/Ha/ha-blueprints/automation/homeassistant/) or [script/homeassistant/](file:///d:/Ha/ha-blueprints/script/homeassistant/).
+3. **Write/Modify Blueprints:** Add or update blueprints under [automation/homeassistant/](automation/homeassistant/) or [script/homeassistant/](script/homeassistant/).
 4. **Test Locally:** Import and validate your modified yaml files in your local Home Assistant instance first.
 5. **Document Changes:**
-   * Update the [CHANGELOG.md](file:///d:/Ha/ha-blueprints/CHANGELOG.md) with details of your changes.
+   * Update the [CHANGELOG.md](CHANGELOG.md) with details of your changes.
    * Update the `README.md` if you introduce new blueprints or helper requirements.
 6. **Submit a Pull Request:** Open a PR against the `main` branch of this repository.
 
@@ -88,7 +88,7 @@ To ensure a seamless user experience, new and modified blueprints must follow th
 
 ## 📝 Changelog Guidelines
 
-Any change to the repository must be documented in [CHANGELOG.md](file:///d:/Ha/ha-blueprints/CHANGELOG.md) using the following rules:
+Any change to the repository must be documented in [CHANGELOG.md](CHANGELOG.md) using the following rules:
 
 * **Format:** We follow [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 * **SemVer:** Group changes under semantic version sections (`[Major].[Minor].[Patch]`).
