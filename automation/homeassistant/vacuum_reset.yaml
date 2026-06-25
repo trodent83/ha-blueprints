@@ -45,7 +45,8 @@ variables:
   # Extract the MAC address from attributes to match the dismissal ID format
   mac_addr: "{{ state_attr(vacuum_ent, 'mac_address') }}"
   
-  # Find helper entities associated with the device dynamically via labels or device ID
+  # Find helper entities associated with the device dynamically via labels or device ID.
+  # This dynamic discovery reduces the number of blueprint inputs/variables the user must configure.
   dev_entities: >-
     {% set all_labels = (labels(vacuum_ent)) | unique %}
     {% set labeled_entities = all_labels | map('label_entities') | sum(start=[]) %}
@@ -90,7 +91,7 @@ action:
       status: needs_action
     response_variable: current_todos
 
-  - action: script.conditional_to_do_creator
+  - action: script.todo_create_task
     data:
       heading: !input todo_title
       body: Replace water and clean the robot
@@ -105,4 +106,4 @@ action:
           entity_id: !input notification_script
         data:
           variables:
-            message: "The vacuum has finished cleaning and is back at the dock. Please remember to clean the robot and replace the water."
+            message: "The vacuum has finished cleaning and is back at its dock. Whenever you have a moment, please remember to clean the robot and replace the water."

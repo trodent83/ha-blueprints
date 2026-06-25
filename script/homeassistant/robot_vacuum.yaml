@@ -32,8 +32,9 @@ sequence:
       vacuum_ent: !input vacuum_entity
 
   - variables:
-      # Identify the vacuum device and associated entities
-      # Merge entities from the vacuum device and those with matching labels
+      # Identify the vacuum device and associated entities.
+      # Merges entities from the physical vacuum device with helper entities sharing the same Home Assistant labels.
+      # This dynamic discovery reduces the number of blueprint inputs/variables the user must configure.
       dev_entities: "{{ (device_entities(device_id(vacuum_ent)) + labels(vacuum_ent) | map('label_entities') | sum(start=[])) | unique | list }}"
 
       # Discover helper entities dynamically using naming pattern matches

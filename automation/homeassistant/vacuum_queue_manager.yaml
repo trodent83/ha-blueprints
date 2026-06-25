@@ -40,6 +40,8 @@ variables:
   # Identify device and entities associated with the vacuum
   vacuum_ent: !input vacuum_entity
   dev_id: "{{ device_id(vacuum_ent) }}"
+  # Find all entities belonging to the same device OR sharing any label with the vacuum entity.
+  # This dynamic discovery reduces the number of blueprint inputs/variables the user must configure.
   dev_entities: >-
     {% set all_labels = (labels(vacuum_ent)) | unique %}
     {% set labeled_entities = all_labels | map('label_entities') | sum(start=[]) %}
@@ -125,7 +127,7 @@ action:
               entity_id: !input notification_script
             data:
               variables:
-                message: "The vacuum has finished, but skipped the following rooms: {{ skipped_rooms | join(', ') }}"
+                message: "The vacuum has finished its run, but skipped a few rooms: {{ skipped_rooms | join(', ') }}."
       - action: input_text.set_value
         target: { entity_id: "{{ queue_text_helper }}" }
         data: { value: "[]" }
@@ -195,7 +197,7 @@ action:
                   entity_id: !input notification_script
                 data:
                   variables:
-                    message: "The vacuum skipped the following rooms: {{ skipped_rooms | join(', ') }}"
+                    message: "Just so you know, the vacuum skipped these rooms: {{ skipped_rooms | join(', ') }}."
           - action: input_number.set_value
             target:
               entity_id: "{{ currently_cleaned_helper }}"
