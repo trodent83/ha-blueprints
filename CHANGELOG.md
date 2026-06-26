@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [1.1.2] - 2026-06-26
+
+### Changed
+- **Reset & Notify Automation (`vacuum_reset.yaml`):** Updated trigger to use the vacuum's `task_status_sensor` state transitioning to `"completed"` instead of listening to the global `dreame_vacuum_task_status` event, improving trigger reliability. Added a `task_status_sensor` input to support specifying the sensor. Removed event-filtering condition.
+- **Queue Manager Automation (`vacuum_queue_manager.yaml`):** Added a dynamic `state_sensor` lookup to query the vacuum's actual state sensor instead of checking the non-existent `vacuum_state` attribute. Added state triggers for `docked`, `returning`, and `idle` to ensure the premature cleaning cycle end handler is reliably executed. Updated room name resolution to flatten segment lists across all maps, resolving name lookup failure for skipped rooms.
+
 ## [1.1.1] - 2026-06-18
 
 ### Fixed

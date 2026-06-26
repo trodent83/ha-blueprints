@@ -10,6 +10,12 @@ blueprint:
         entity:
           domain: vacuum
           integration: dreame_vacuum
+    task_status_sensor:
+      name: Task Status Sensor
+      description: "The task status sensor of the vacuum robot."
+      selector:
+        entity:
+          domain: sensor
     todo_list:
       name: To-Do List
       description: "The To-Do list to query and add maintenance tasks to when cleaning completes."
@@ -33,11 +39,10 @@ blueprint:
 mode: single
 
 triggers:
-  # Listen for the task status event from the Dreame integration
-  - trigger: event
-    event_type: dreame_vacuum_task_status
-    event_data:
-      completed: true
+  # Trigger when the vacuum's task status changes to completed
+  - trigger: state
+    entity_id: !input task_status_sensor
+    to: "completed"
 
 variables:
   vacuum_ent: !input vacuum_entity 
@@ -54,11 +59,6 @@ variables:
   
   queue_text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
   currently_cleaned_helper: "{{ dev_entities | select('match', '^input_number\\..*_currently_cleaned$') | first | default('none') }}"
-
-condition:
-  - condition: template
-    value_template: >-
-      {{ trigger.event.data.entity_id == vacuum_ent }}
 
 action:
   # Reset the rooms to clean helper to empty the queue

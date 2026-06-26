@@ -51,8 +51,9 @@ variables:
   queue_text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
   currently_cleaned_helper: "{{ dev_entities | select('match', '^input_number\\..*_currently_cleaned$') | first | default('none') }}"
   corridor_rooms_input: !input corridor_rooms
+  state_sensor: "{{ dev_entities | select('match', '^sensor\\..*_state$') | first | default('none') }}"
 
-# 1. TRIGGER: Specifically watching for undocking and segment transitions
+# 1. TRIGGER: Specifically watching for undocking, segment transitions, and returns
 trigger:
   - trigger: state
     entity_id: !input vacuum_entity
@@ -61,12 +62,21 @@ trigger:
   - trigger: state
     entity_id: !input vacuum_entity
     attribute: current_segment
+  - trigger: state
+    entity_id: !input vacuum_entity
+    to: docked
+  - trigger: state
+    entity_id: !input vacuum_entity
+    to: returning
+  - trigger: state
+    entity_id: !input vacuum_entity
+    to: idle
 
 condition:
   - condition: template
     value_template: >-
-      {% set vacuum_state = state_attr(vacuum_ent, 'vacuum_state') %}
-      {{ vacuum_state not in ['washing', 'returning_to_wash', 'drying'] }}
+      {% set status_state = states(state_sensor) if state_sensor != 'none' else 'unknown' %}
+      {{ status_state not in ['washing', 'returning_to_wash', 'drying'] }}
 
 action:
   # Notify if required helper entities are missing
@@ -114,10 +124,14 @@ action:
       - variables:
           skipped_rooms: >
             {% set skipped_ids = current_queue | map('int') | list %}
-            {% set map_name = state_attr(vacuum_ent, 'selected_map') %}
             {% set rooms_dict = state_attr(vacuum_ent, 'rooms') %}
-            {% set all_rooms = (rooms_dict.get(map_name) if rooms_dict and map_name else []) | default([]) %}
-            {{ all_rooms | selectattr('id', 'in', skipped_ids) | map(attribute='name') | list }}
+            {% set ns = namespace(all_rooms=[]) %}
+            {% if rooms_dict %}
+              {% for map, rooms in rooms_dict.items() %}
+                {% set ns.all_rooms = ns.all_rooms + rooms %}
+              {% endfor %}
+            {% endif %}
+            {{ ns.all_rooms | selectattr('id', 'in', skipped_ids) | map(attribute='name') | list }}
       - if:
           - condition: template
             value_template: "{{ notification_script != '' and skipped_rooms | length > 0 }}"
@@ -184,10 +198,14 @@ action:
               skipped_rooms: >
                 {% set end_index = current_queue.index(active_segment) %}
                 {% set skipped_ids = current_queue[0:end_index] | map('int') | list %}
-                {% set map_name = state_attr(vacuum_ent, 'selected_map') %}
                 {% set rooms_dict = state_attr(vacuum_ent, 'rooms') %}
-                {% set all_rooms = (rooms_dict.get(map_name) if rooms_dict and map_name else []) | default([]) %}
-                {{ all_rooms | selectattr('id', 'in', skipped_ids) | map(attribute='name') | list }}
+                {% set ns = namespace(all_rooms=[]) %}
+                {% if rooms_dict %}
+                  {% for map, rooms in rooms_dict.items() %}
+                    {% set ns.all_rooms = ns.all_rooms + rooms %}
+                  {% endfor %}
+                {% endif %}
+                {{ ns.all_rooms | selectattr('id', 'in', skipped_ids) | map(attribute='name') | list }}
           - if:
               - condition: template
                 value_template: "{{ notification_script != '' and skipped_rooms | length > 0 }}"
