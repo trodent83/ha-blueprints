@@ -59,6 +59,8 @@ variables:
   
   queue_text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
   currently_cleaned_helper: "{{ dev_entities | select('match', '^input_number\\..*_currently_cleaned$') | first | default('none') }}"
+  cleaning_type_helper: "{{ dev_entities | select('match', '^input_select\\..*_cleaning_type$') | first | default('none') }}"
+  is_vacuum_only: "{{ cleaning_type_helper != 'none' and is_state(cleaning_type_helper, 'Vacuum') }}"
 
 action:
   # Reset the rooms to clean helper to empty the queue
@@ -83,10 +85,15 @@ action:
         data:
           value: 0
 
-  - action: script.todo_create_task
-    data:
-      heading: !input todo_title
-      body: Replace water and clean the robot
+  # Create maintenance checklist task unless the cycle was vacuum-only
+  - if:
+      - condition: template
+        value_template: "{{ not is_vacuum_only }}"
+    then:
+      - action: script.todo_create_task
+        data:
+          heading: !input todo_title
+          body: Replace water and clean the robot
 
   # Run the custom notification script to alert the user if configured
   - if:
@@ -98,4 +105,9 @@ action:
           entity_id: !input notification_script
         data:
           variables:
-            message: "The vacuum has finished cleaning and is back at its dock. Whenever you have a moment, please remember to clean the robot and replace the water."
+            message: >-
+              {% if is_vacuum_only %}
+                The vacuum has finished cleaning and is back at its dock.
+              {% else %}
+                The vacuum has finished cleaning and is back at its dock. Whenever you have a moment, please remember to clean the robot and replace the water.
+              {% endif %}
