@@ -83,14 +83,6 @@ action:
         data:
           value: 0
 
-  # Retrieve active items on the To-Do list to avoid duplicate creation
-  - action: todo.get_items
-    target:
-      entity_id: !input todo_list
-    data:
-      status: needs_action
-    response_variable: current_todos
-
   - action: script.todo_create_task
     data:
       heading: !input todo_title
