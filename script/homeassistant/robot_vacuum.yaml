@@ -20,6 +20,7 @@ blueprint:
   input:
     vacuum_entity:
       name: Vacuum Robot
+      description: "The Dreame vacuum robot entity. This device must also be assigned the helper entities (queue, cleaning type, etc.) in your Home Assistant settings for dynamic discovery to work."
       selector:
         entity:
           domain: vacuum
@@ -27,42 +28,42 @@ blueprint:
 
 sequence:
   - variables:
-      # MUST map !input to a variable name to use it inside Jinja templates
+      # Map blueprint inputs to local variables for use inside Jinja templates
       vacuum_ent: !input vacuum_entity
 
   - variables:
-      # 1. IDENTIFY DEVICE & ENTITIES
-      # Merge entities from the vacuum's Device + any entities with the provided label
+      # Identify the vacuum device and associated entities.
+      # Merges entities from the physical vacuum device with helper entities sharing the same Home Assistant labels.
+      # This dynamic discovery reduces the number of blueprint inputs/variables the user must configure.
       dev_entities: "{{ (device_entities(device_id(vacuum_ent)) + labels(vacuum_ent) | map('label_entities') | sum(start=[])) | unique | list }}"
 
-      # 2. DYNAMIC ENTITY DISCOVERY VIA REGEX
+      # Discover helper entities dynamically using naming pattern matches
       # Domain + Wildcard + Specific Suffix
-      text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
+      queue_text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
       clean_type_select: "{{ dev_entities | select('match', '^input_select\\..*_cleaning_type$') | first | default('none') }}"
-      genie_select: "{{ dev_entities | select('match', '^select\\..*_cleangenius$') | first | default('none') }}"
-      mode_select: >-
+      cleangenius_select: "{{ dev_entities | select('match', '^select\\..*_cleangenius$') | first | default('none') }}"
+      cleaning_mode_select: >-
         {{ dev_entities 
           | select('match', '^select\\..*_cleaning_mode$') 
           | reject('search', 'room_') 
           | first | default('none') 
         }}
 
-      # 3. ERROR CHECKING LOGIC
-      # Compiles a list of any required entities that were not found
+      # Compile a list of all required helpers that could not be discovered
       missing_entities: >-
         {% set ns = namespace(missing=[]) %}
-        {% if text_helper == 'none' %}{% set ns.missing = ns.missing + ['Rooms Text Helper (_rooms_to_clean)'] %}{% endif %}
+        {% if queue_text_helper == 'none' %}{% set ns.missing = ns.missing + ['Rooms Text Helper (_rooms_to_clean)'] %}{% endif %}
         {% if clean_type_select == 'none' %}{% set ns.missing = ns.missing + ['Cleaning Type Selector (_cleaning_type)'] %}{% endif %}
-        {% if genie_select == 'none' %}{% set ns.missing = ns.missing + ['CleanGenius Select (_cleangenius)'] %}{% endif %}
-        {% if mode_select == 'none' %}{% set ns.missing = ns.missing + ['Cleaning Mode Select (_cleaning_mode)'] %}{% endif %}
+        {% if cleangenius_select == 'none' %}{% set ns.missing = ns.missing + ['CleanGenius Select (_cleangenius)'] %}{% endif %}
+        {% if cleaning_mode_select == 'none' %}{% set ns.missing = ns.missing + ['Cleaning Mode Select (_cleaning_mode)'] %}{% endif %}
         {{ ns.missing | join(', ') }}
 
-  # 4. STOP & NOTIFY IF ENTITIES ARE MISSING
+  # Stop execution and notify the user if any required helpers are missing
   - if:
       - condition: template
         value_template: "{{ missing_entities | length > 0 }}"
     then:
-      - action: notify.persistent_notification
+      - action: persistent_notification.create
         data:
           title: "Vacuum Script Error - Detailed Debug Info"
           message: |
@@ -71,10 +72,10 @@ sequence:
             Ensure helpers match naming convention (*_rooms_to_clean, *_cleaning_type, *_cleangenius, *_cleaning_mode) and are labeled correctly.
       - stop: "Required entities missing"
 
-  # 5. PARSE QUEUE STRING
+  # Parse the room queue string from the helper text state
   - variables:
       current_queue: >-
-        {% set val = states(text_helper) %}
+        {% set val = states(queue_text_helper) %}
         {% if val not in ['unknown', 'unavailable'] %}
           {% set raw = val | replace('[', '') | replace(']', '') | replace(' ', '') %}
           {{ raw.split(',') | map('int', 0) | select('gt', 0) | list }}
@@ -82,11 +83,11 @@ sequence:
           []
         {% endif %}
 
-  # 6. STOP IF QUEUE IS EMPTY
+  # Stop execution if the room queue is empty
   - condition: template
     value_template: "{{ current_queue | length > 0 }}"
 
-  # 7. CONFIGURE CLEANING PARAMETERS
+  # Configure vacuum cleaning mode and CleanGenius settings
   - choose:
       - conditions:
           - condition: template
@@ -94,7 +95,7 @@ sequence:
         sequence:
           - action: select.select_option
             target:
-              entity_id: "{{ genie_select }}"
+              entity_id: "{{ cleangenius_select }}"
             data:
               option: routine_cleaning
       - conditions:
@@ -103,24 +104,24 @@ sequence:
         sequence:
           - action: select.select_option
             target:
-              entity_id: "{{ genie_select }}"
+              entity_id: "{{ cleangenius_select }}"
             data:
               option: deep_cleaning
     default:
       - action: select.select_option
         target:
-          entity_id: "{{ genie_select }}"
+          entity_id: "{{ cleangenius_select }}"
         data:
           option: "off"
       - action: select.select_option
         target:
-          entity_id: "{{ mode_select }}"
+          entity_id: "{{ cleaning_mode_select }}"
         data:
           option: "{{ 'sweeping' if states(clean_type_select) | lower == 'vacuum' else 'mopping' }}"
 
   - delay: "00:00:01"
 
-  # 8. START CLEANING
+  # Start the segment cleaning cycle on the Dreame vacuum
   - action: dreame_vacuum.vacuum_clean_segment
     target:
       entity_id: !input vacuum_entity
