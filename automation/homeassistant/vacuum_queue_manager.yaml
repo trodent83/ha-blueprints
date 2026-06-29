@@ -53,7 +53,7 @@ variables:
   corridor_rooms_input: !input corridor_rooms
   state_sensor: "{{ dev_entities | select('match', '^sensor\\..*_state$') | first | default('none') }}"
 
-# 1. TRIGGER: Specifically watching for undocking, segment transitions, and returns
+# 1. TRIGGER: Specifically watching for undocking and segment transitions
 trigger:
   - trigger: state
     entity_id: !input vacuum_entity
@@ -62,15 +62,6 @@ trigger:
   - trigger: state
     entity_id: !input vacuum_entity
     attribute: current_segment
-  - trigger: state
-    entity_id: !input vacuum_entity
-    to: docked
-  - trigger: state
-    entity_id: !input vacuum_entity
-    to: returning
-  - trigger: state
-    entity_id: !input vacuum_entity
-    to: idle
 
 condition:
   - condition: template
@@ -111,41 +102,12 @@ action:
       # Get the segment currently being cleaned from the vacuum attributes
       active_segment: "{{ state_attr(vacuum_ent, 'current_segment') | int(0) }}"
 
-  # Handle premature end of the cleaning cycle (clear queue and notify)
+  # Stop execution if vacuum is docked or returning (queue resets are handled by vacuum_reset.yaml)
   - if:
       - condition: template
-        value_template: >
-          {{
-            states(vacuum_ent) in ['returning', 'docked', 'idle'] and
-            not state_attr(vacuum_ent, 'resume_cleaning') and
-            current_queue | length > 0
-          }}
+        value_template: "{{ states(vacuum_ent) in ['returning', 'docked', 'idle'] }}"
     then:
-      - variables:
-          skipped_rooms: >
-            {% set skipped_ids = current_queue | map('int') | list %}
-            {% set rooms_dict = state_attr(vacuum_ent, 'rooms') %}
-            {% set ns = namespace(all_rooms=[]) %}
-            {% if rooms_dict %}
-              {% for map, rooms in rooms_dict.items() %}
-                {% set ns.all_rooms = ns.all_rooms + rooms %}
-              {% endfor %}
-            {% endif %}
-            {{ ns.all_rooms | selectattr('id', 'in', skipped_ids) | map(attribute='name') | list }}
-      - if:
-          - condition: template
-            value_template: "{{ notification_script != '' and skipped_rooms | length > 0 }}"
-        then:
-          - action: script.turn_on
-            target:
-              entity_id: !input notification_script
-            data:
-              variables:
-                message: "The vacuum has finished its run, but skipped a few rooms: {{ skipped_rooms | join(', ') }}."
-      - action: input_text.set_value
-        target: { entity_id: "{{ queue_text_helper }}" }
-        data: { value: "[]" }
-      - stop: "Cleaning cycle ended prematurely. Cleared remaining queue."
+      - stop: "Vacuum returned to dock or is idle. Queue manager actions suspended."
 
   # Notify if the queue helper contains data but parsing fails to yield valid segment IDs
   - if:

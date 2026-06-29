@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [1.1.3] - 2026-06-29
+
+### Changed
+- **Reset & Notify Automation (`vacuum_reset.yaml`):** Added logic to resolve any remaining rooms in the queue as skipped prior to resetting the queue helper. Included the list of skipped rooms dynamically within the final vocal dock completion announcement.
+- **Queue Manager Automation (`vacuum_queue_manager.yaml`):** Removed redundant premature ending handler and triggers to prevent race conditions and overlapping verbal announcements. De-duplicated queue clearing and delegate final announcements entirely to `vacuum_reset.yaml`.
+
 ## [1.1.2] - 2026-06-26
 
 ### Changed

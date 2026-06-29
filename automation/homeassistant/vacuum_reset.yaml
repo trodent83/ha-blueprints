@@ -62,6 +62,23 @@ variables:
   cleaning_type_helper: "{{ dev_entities | select('match', '^input_select\\..*_cleaning_type$') | first | default('none') }}"
   is_vacuum_only: "{{ cleaning_type_helper != 'none' and is_state(cleaning_type_helper, 'Vacuum') }}"
 
+  # Compute skipped rooms dynamically from the remaining items in queue_text_helper before resetting it
+  skipped_rooms: >-
+    {% set val = states(queue_text_helper) if queue_text_helper != 'none' else '[]' %}
+    {% set skipped_ids = [] %}
+    {% if val not in ['unknown', 'unavailable', '', '[]'] %}
+      {% set raw = val | replace('[', '') | replace(']', '') | replace(' ', '') %}
+      {% set skipped_ids = raw.split(',') | map('int', 0) | select('gt', 0) | list %}
+    {% endif %}
+    {% set rooms_dict = state_attr(vacuum_ent, 'rooms') %}
+    {% set ns = namespace(all_rooms=[]) %}
+    {% if rooms_dict %}
+      {% for map, rooms in rooms_dict.items() %}
+        {% set ns.all_rooms = ns.all_rooms + rooms %}
+      {% endfor %}
+    {% endif %}
+    {{ ns.all_rooms | selectattr('id', 'in', skipped_ids) | map(attribute='name') | list }}
+
 action:
   # Reset the rooms to clean helper to empty the queue
   - if:
@@ -106,8 +123,12 @@ action:
         data:
           variables:
             message: >-
+              {% set skipped_str = "" %}
+              {% if skipped_rooms | length > 0 %}
+                {% set skipped_str = ", but skipped some rooms: " ~ skipped_rooms | join(', ') %}
+              {% endif %}
               {% if is_vacuum_only %}
-                The vacuum has finished cleaning and is back at its dock.
+                The vacuum has finished cleaning and is back at its dock{{ skipped_str }}.
               {% else %}
-                The vacuum has finished cleaning and is back at its dock. Whenever you have a moment, please remember to clean the robot and replace the water.
+                The vacuum has finished cleaning and is back at its dock{{ skipped_str }}. Whenever you have a moment, please remember to clean the robot and replace the water.
               {% endif %}
