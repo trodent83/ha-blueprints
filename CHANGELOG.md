@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 - **Consumable Check Script Blueprint (`vacuum_check_consumables.yaml`):** New script blueprint that checks if any of the 5 vacuum consumables (main brush, side brush, filter, sensors, wheels) are under 10% life and creates task reminders on a Home Assistant To-Do list.
+- **Vacuum Abort Script Blueprint (`vacuum_abort.yaml`):** New script blueprint that clears the rooms queue helper dynamically and returns the vacuum robot to its base.
+- **Vacuum Toggle Pause Script Blueprint (`vacuum_toggle_pause.yaml`):** New script blueprint that toggles between playing and paused/error states for a vacuum robot.
+
 
 ### Changed
 - **Reset & Notify Automation Blueprint (`vacuum_reset.yaml`):** Added `consumable_check_script` input and mapped it to run the configured script upon cleaning completion.

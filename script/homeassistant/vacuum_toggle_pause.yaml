@@ -1,0 +1,41 @@
+blueprint:
+  name: Dreame Vacuum - Toggle Pause
+  description: Toggles between pause and resume states for the vacuum robot.
+  domain: script
+  input:
+    vacuum_entity:
+      name: Vacuum Robot
+      description: The vacuum robot entity.
+      selector:
+        entity:
+          domain: vacuum
+          integration: dreame_vacuum
+
+sequence:
+  - variables:
+      # Map inputs to variables
+      vacuum_ent: !input vacuum_entity
+
+  - choose:
+      # 1. State is paused or error -> Resume (start)
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: template
+                value_template: "{{ is_state(vacuum_ent, 'paused') }}"
+              - condition: template
+                value_template: "{{ is_state(vacuum_ent, 'error') }}"
+        sequence:
+          - action: vacuum.start
+            target:
+              entity_id: "{{ vacuum_ent }}"
+      # 2. State is cleaning -> Pause
+      - conditions:
+          - condition: template
+            value_template: "{{ is_state(vacuum_ent, 'cleaning') }}"
+        sequence:
+          - action: vacuum.pause
+            target:
+              entity_id: "{{ vacuum_ent }}"
+
+mode: single

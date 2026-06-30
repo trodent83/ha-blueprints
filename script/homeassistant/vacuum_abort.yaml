@@ -1,0 +1,41 @@
+blueprint:
+  name: Dreame Vacuum - Abort Cleaning
+  description: Aborts the current vacuum cleaning run, clears the queue dynamically, and returns the robot to base.
+  domain: script
+  input:
+    vacuum_entity:
+      name: Vacuum Robot
+      description: The vacuum robot entity.
+      selector:
+        entity:
+          domain: vacuum
+          integration: dreame_vacuum
+
+sequence:
+  - variables:
+      # Map inputs to variables
+      vacuum_ent: !input vacuum_entity
+
+  - variables:
+      dev_id: "{{ device_id(vacuum_ent) }}"
+      # Dynamic discovery of rooms queue text helper
+      dev_entities: "{{ (device_entities(dev_id) + labels(vacuum_ent) | map('label_entities') | sum(start=[])) | unique | list }}"
+      queue_text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
+
+  # 1. Clear the queue if found
+  - if:
+      - condition: template
+        value_template: "{{ queue_text_helper != 'none' }}"
+    then:
+      - action: input_text.set_value
+        target:
+          entity_id: "{{ queue_text_helper }}"
+        data:
+          value: "[]"
+
+  # 2. Return vacuum to dock
+  - action: vacuum.return_to_base
+    target:
+      entity_id: "{{ vacuum_ent }}"
+
+mode: single
