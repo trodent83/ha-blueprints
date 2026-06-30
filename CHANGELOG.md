@@ -6,7 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Consumable Check Script Blueprint (`vacuum_check_consumables.yaml`):** New script blueprint that checks if any of the 5 vacuum consumables (main brush, side brush, filter, sensors, wheels) are under 10% life and creates task reminders on a Home Assistant To-Do list.
+
+### Changed
+- **Reset & Notify Automation Blueprint (`vacuum_reset.yaml`):** Added `consumable_check_script` input and mapped it to run the configured script upon cleaning completion.
+
 ## [1.1.3] - 2026-06-29
+
 
 ### Changed
 - **Reset & Notify Automation (`vacuum_reset.yaml`):** Added logic to resolve any remaining rooms in the queue as skipped prior to resetting the queue helper. Included the list of skipped rooms dynamically within the final vocal dock completion announcement.

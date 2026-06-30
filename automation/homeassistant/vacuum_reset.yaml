@@ -35,6 +35,13 @@ blueprint:
       selector:
         entity:
           domain: script
+    consumable_check_script:
+      name: Consumable Check Script
+      description: "Optional script to run when the cleaning cycle completes to check and report low consumables."
+      default: ""
+      selector:
+        entity:
+          domain: script
 
 mode: single
 
@@ -46,6 +53,7 @@ triggers:
 
 variables:
   vacuum_ent: !input vacuum_entity 
+  consumable_script: !input consumable_check_script
   dev_id: "{{ device_id(vacuum_ent) }}"
   # Extract the MAC address from attributes to match the dismissal ID format
   mac_addr: "{{ state_attr(vacuum_ent, 'mac_address') }}"
@@ -132,3 +140,12 @@ action:
               {% else %}
                 The vacuum has finished cleaning and is back at its dock{{ skipped_str }}. Whenever you have a moment, please remember to clean the robot and replace the water.
               {% endif %}
+
+  # Run the consumable check script if configured
+  - if:
+      - condition: template
+        value_template: "{{ consumable_script != '' }}"
+    then:
+      - action: script.turn_on
+        target:
+          entity_id: "{{ consumable_script }}"

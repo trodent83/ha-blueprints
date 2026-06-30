@@ -1,0 +1,86 @@
+blueprint:
+  name: Dreame Vacuum - Consumable Check
+  description: Checks the remaining life of vacuum consumables and creates To-Do tasks for those below 10%.
+  domain: script
+  input:
+    vacuum_entity:
+      name: Vacuum Robot
+      description: The vacuum robot entity to inspect.
+      selector:
+        entity:
+          domain: vacuum
+          integration: dreame_vacuum
+    floor_name:
+      name: Floor Name
+      description: "Name of the floor / area (e.g. 'Downstairs' or 'First Floor') used in the task title prefix."
+      selector:
+        text: {}
+    todo_list:
+      name: To-Do List
+      description: The list to create tasks on.
+      default: todo.german_home
+      selector:
+        entity:
+          domain: todo
+
+sequence:
+  - variables:
+      # Map inputs to variables
+      vacuum_ent: !input vacuum_entity
+      floor: !input floor_name
+      todo_ent: !input todo_list
+
+  # 1. Check Main Roller Brush
+  - if:
+      - condition: template
+        value_template: "{{ (state_attr(vacuum_ent, 'main_brush_left') | int(100)) < 10 }}"
+    then:
+      - action: script.todo_create_task
+        data:
+          heading: "{{ floor }} Robot - Replace Main Roller Brush"
+          body: "The life of the main roller brush is under 10%. Please replace it."
+          target_list: "{{ todo_ent }}"
+
+  # 2. Check Side Sweeping Brush
+  - if:
+      - condition: template
+        value_template: "{{ (state_attr(vacuum_ent, 'side_brush_left') | int(100)) < 10 }}"
+    then:
+      - action: script.todo_create_task
+        data:
+          heading: "{{ floor }} Robot - Replace Side Sweeping Brush"
+          body: "The life of the side sweeping brush is under 10%. Please replace it."
+          target_list: "{{ todo_ent }}"
+
+  # 3. Check HEPA Dust Filter
+  - if:
+      - condition: template
+        value_template: "{{ (state_attr(vacuum_ent, 'filter_left') | int(100)) < 10 }}"
+    then:
+      - action: script.todo_create_task
+        data:
+          heading: "{{ floor }} Robot - Replace HEPA Dust Filter"
+          body: "The life of the HEPA dust filter is under 10%. Please replace it."
+          target_list: "{{ todo_ent }}"
+
+  # 4. Check Optical Sensors
+  - if:
+      - condition: template
+        value_template: "{{ (state_attr(vacuum_ent, 'sensor_dirty_left') | int(100)) < 10 }}"
+    then:
+      - action: script.todo_create_task
+        data:
+          heading: "{{ floor }} Robot - Clean Sensors"
+          body: "The optical sensors are dirty (life remaining under 10%). Please clean them."
+          target_list: "{{ todo_ent }}"
+
+  # 5. Check Drive Wheels
+  - if:
+      - condition: template
+        value_template: "{{ (state_attr(vacuum_ent, 'wheel_dirty_left') | int(100)) < 10 }}"
+    then:
+      - action: script.todo_create_task
+        data:
+          heading: "{{ floor }} Robot - Drive Wheel Maintenance"
+          body: "The drive wheels require maintenance (life remaining under 10%). Please check and clean them."
+          target_list: "{{ todo_ent }}"
