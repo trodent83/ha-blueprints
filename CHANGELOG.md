@@ -15,7 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 
 ### Changed
-- **Reset & Notify Automation Blueprint (`vacuum_reset.yaml`):** Added `consumable_check_script` input and mapped it to run the configured script upon cleaning completion.
+- **Reset & Notify Automation Blueprint (`vacuum_reset.yaml`):**
+  - Added a template condition to ignore state transitions from `unavailable` or `unknown` (e.g. on integration reload) to prevent false completion triggers.
+  - Added `consumable_check_script` input and mapped it to run the configured script upon cleaning completion.
 
 ## [1.1.3] - 2026-06-29
 

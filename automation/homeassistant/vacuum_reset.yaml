@@ -51,6 +51,11 @@ triggers:
     entity_id: !input task_status_sensor
     to: "completed"
 
+condition:
+  - condition: template
+    value_template: >-
+      {{ trigger.from_state is not none and trigger.from_state.state not in ['unavailable', 'unknown'] }}
+
 variables:
   vacuum_ent: !input vacuum_entity 
   consumable_script: !input consumable_check_script
