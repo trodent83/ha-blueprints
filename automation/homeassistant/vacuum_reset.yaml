@@ -124,6 +124,7 @@ action:
         data:
           heading: !input todo_title
           body: Replace water and clean the robot
+          target_list: !input todo_list
 
   # Run the custom notification script to alert the user if configured
   - if:
