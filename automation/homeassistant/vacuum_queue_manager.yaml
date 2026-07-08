@@ -153,7 +153,9 @@ action:
       # Case 3: Robot skipped rooms and went straight to a room further down the queue
       - conditions:
           - condition: template
-            value_template: "{{ active_segment in current_queue }}"
+            value_template: >-
+              {% set is_undocking = trigger.from_state is defined and trigger.from_state is not none and trigger.from_state.state == 'docked' %}
+              {{ not is_undocking and active_segment in current_queue }}
         sequence:
           # Calculate skipped rooms and notify if target script is configured
           - variables:
