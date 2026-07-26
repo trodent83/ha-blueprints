@@ -18,9 +18,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Reset & Notify Automation Blueprint (`vacuum_reset.yaml`):**
   - Added a template condition to ignore state transitions from `unavailable` or `unknown` (e.g. on integration reload) to prevent false completion triggers.
   - Added `consumable_check_script` input and mapped it to run the configured script upon cleaning completion.
+  - Updated `is_vacuum_only` variable template to check the state case-insensitively, supporting vacuum-only mode comparisons regardless of the helper's text casing.
 
 ### Fixed
 - **Queue Manager Automation Blueprint (`vacuum_queue_manager.yaml`):** Fixed stale room skipping bug where a stale `current_segment` attribute from the previous cleaning run could cause the queue manager to immediately fast-forward and clear the new cleaning queue upon undocking.
+- **Reset & Notify Automation Blueprint (`vacuum_reset.yaml`):** Excluded transitions from `idle` state in the trigger condition to prevent false completion triggers during Home Assistant reboots and integration connection drops.
 
 ## [1.1.3] - 2026-06-29
 

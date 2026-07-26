@@ -54,7 +54,7 @@ triggers:
 condition:
   - condition: template
     value_template: >-
-      {{ trigger.from_state is not none and trigger.from_state.state not in ['unavailable', 'unknown'] }}
+      {{ trigger.from_state is not none and trigger.from_state.state not in ['unavailable', 'unknown', 'idle'] }}
 
 variables:
   vacuum_ent: !input vacuum_entity 
@@ -73,7 +73,7 @@ variables:
   queue_text_helper: "{{ dev_entities | select('match', '^input_text\\..*_rooms_to_clean$') | first | default('none') }}"
   currently_cleaned_helper: "{{ dev_entities | select('match', '^input_number\\..*_currently_cleaned$') | first | default('none') }}"
   cleaning_type_helper: "{{ dev_entities | select('match', '^input_select\\..*_cleaning_type$') | first | default('none') }}"
-  is_vacuum_only: "{{ cleaning_type_helper != 'none' and is_state(cleaning_type_helper, 'Vacuum') }}"
+  is_vacuum_only: "{{ cleaning_type_helper != 'none' and states(cleaning_type_helper) | lower == 'vacuum' }}"
 
   # Compute skipped rooms dynamically from the remaining items in queue_text_helper before resetting it
   skipped_rooms: >-
