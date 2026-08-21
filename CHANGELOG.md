@@ -16,9 +16,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 - **Reset & Notify Automation Blueprint (`vacuum_reset.yaml`):**
+  - Added optional `vacuum_name` input to dynamically prepend explicit robot names (e.g., "The Ground Floor vacuum", "The First Floor vacuum") to completion speech announcements.
   - Added a template condition to ignore state transitions from `unavailable` or `unknown` (e.g. on integration reload) to prevent false completion triggers.
   - Added `consumable_check_script` input and mapped it to run the configured script upon cleaning completion.
   - Updated `is_vacuum_only` variable template to check the state case-insensitively, supporting vacuum-only mode comparisons regardless of the helper's text casing.
+- **Queue Manager Automation Blueprint (`vacuum_queue_manager.yaml`):**
+  - Added optional `vacuum_name` input so room skip notifications explicitly name the target vacuum (e.g., "the Ground Floor vacuum").
 
 ### Fixed
 - **Queue Manager Automation Blueprint (`vacuum_queue_manager.yaml`):** Fixed stale room skipping bug where a stale `current_segment` attribute from the previous cleaning run could cause the queue manager to immediately fast-forward and clear the new cleaning queue upon undocking.

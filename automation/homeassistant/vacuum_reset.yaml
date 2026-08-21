@@ -35,6 +35,12 @@ blueprint:
       selector:
         entity:
           domain: script
+    vacuum_name:
+      name: Vacuum Name
+      description: "Custom name or floor location of the vacuum robot used in announcements (e.g. 'Ground Floor vacuum' or 'First Floor vacuum'). If empty, falls back to the vacuum entity's friendly name."
+      default: ""
+      selector:
+        text: {}
     consumable_check_script:
       name: Consumable Check Script
       description: "Optional script to run when the cleaning cycle completes to check and report low consumables."
@@ -58,10 +64,21 @@ condition:
 
 variables:
   vacuum_ent: !input vacuum_entity 
+  vacuum_name_input: !input vacuum_name
   consumable_script: !input consumable_check_script
   dev_id: "{{ device_id(vacuum_ent) }}"
   # Extract the MAC address from attributes to match the dismissal ID format
   mac_addr: "{{ state_attr(vacuum_ent, 'mac_address') }}"
+  
+  # Derive identifiable robot name for announcements
+  robot_name: >-
+    {% if vacuum_name_input | trim != '' %}
+      {{ vacuum_name_input | trim }}
+    {% elif state_attr(vacuum_ent, 'friendly_name') %}
+      {{ state_attr(vacuum_ent, 'friendly_name') }}
+    {% else %}
+      robot vacuum
+    {% endif %}
   
   # Find helper entities associated with the device dynamically via labels or device ID.
   # This dynamic discovery reduces the number of blueprint inputs/variables the user must configure.
@@ -137,14 +154,15 @@ action:
         data:
           variables:
             message: >-
+              {% set name_prefix = robot_name if robot_name.lower().startswith(('the ', 'a ')) else ('The ' ~ robot_name) %}
               {% set skipped_str = "" %}
               {% if skipped_rooms | length > 0 %}
                 {% set skipped_str = ", but skipped some rooms: " ~ skipped_rooms | join(', ') %}
               {% endif %}
               {% if is_vacuum_only %}
-                The vacuum has finished cleaning and is back at its dock{{ skipped_str }}.
+                {{ name_prefix }} has finished cleaning and is back at its dock{{ skipped_str }}.
               {% else %}
-                The vacuum has finished cleaning and is back at its dock{{ skipped_str }}. Whenever you have a moment, please remember to clean the robot and replace the water.
+                {{ name_prefix }} has finished cleaning and is back at its dock{{ skipped_str }}. Whenever you have a moment, please remember to clean the robot and replace the water.
               {% endif %}
 
   # Run the consumable check script if configured

@@ -33,13 +33,31 @@ blueprint:
       selector:
         entity:
           domain: script
+    vacuum_name:
+      name: Vacuum Name
+      description: "Custom name or floor location of the vacuum robot used in announcements (e.g. 'Ground Floor vacuum' or 'First Floor vacuum'). If empty, falls back to the vacuum entity's friendly name."
+      default: ""
+      selector:
+        text: {}
 
 mode: single
 
 variables:
   # Identify device and entities associated with the vacuum
   vacuum_ent: !input vacuum_entity
+  vacuum_name_input: !input vacuum_name
   dev_id: "{{ device_id(vacuum_ent) }}"
+  
+  # Derive identifiable robot name for announcements
+  robot_name: >-
+    {% if vacuum_name_input | trim != '' %}
+      {{ vacuum_name_input | trim }}
+    {% elif state_attr(vacuum_ent, 'friendly_name') %}
+      {{ state_attr(vacuum_ent, 'friendly_name') }}
+    {% else %}
+      robot vacuum
+    {% endif %}
+
   # Find all entities belonging to the same device OR sharing any label with the vacuum entity.
   # This dynamic discovery reduces the number of blueprint inputs/variables the user must configure.
   dev_entities: >-
@@ -179,7 +197,9 @@ action:
                   entity_id: !input notification_script
                 data:
                   variables:
-                    message: "Just so you know, the vacuum skipped these rooms: {{ skipped_rooms | join(', ') }}."
+                    message: >-
+                      {% set name_prefix = robot_name if robot_name.lower().startswith(('the ', 'a ')) else ('the ' ~ robot_name) %}
+                      Just so you know, {{ name_prefix }} skipped these rooms: {{ skipped_rooms | join(', ') }}.
           - action: input_number.set_value
             target:
               entity_id: "{{ currently_cleaned_helper }}"
