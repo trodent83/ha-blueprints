@@ -48,6 +48,12 @@ blueprint:
       selector:
         entity:
           domain: script
+    corridor_rooms:
+      name: Corridor / Multi-Access Rooms
+      description: "Optional comma-separated list of room IDs that act as corridors or multi-access transit nodes. If specified, these will not be falsely announced as skipped rooms."
+      default: ""
+      selector:
+        text: {}
 
 mode: single
 
@@ -66,6 +72,7 @@ variables:
   vacuum_ent: !input vacuum_entity 
   vacuum_name_input: !input vacuum_name
   consumable_script: !input consumable_check_script
+  corridor_rooms_input: !input corridor_rooms
   dev_id: "{{ device_id(vacuum_ent) }}"
   # Extract the MAC address from attributes to match the dismissal ID format
   mac_addr: "{{ state_attr(vacuum_ent, 'mac_address') }}"
@@ -92,13 +99,22 @@ variables:
   cleaning_type_helper: "{{ dev_entities | select('match', '^input_select\\..*_cleaning_type$') | first | default('none') }}"
   is_vacuum_only: "{{ cleaning_type_helper != 'none' and states(cleaning_type_helper) | lower == 'vacuum' }}"
 
+  parsed_corridor_rooms: >-
+    {% set val = corridor_rooms_input %}
+    {% if val not in ['unknown', 'unavailable', ''] %}
+      {% set raw = val | replace('[', '') | replace(']', '') | replace(' ', '') %}
+      {{ raw.split(',') | map('int', 0) | select('gt', 0) | list }}
+    {% else %}
+      []
+    {% endif %}
+
   # Compute skipped rooms dynamically from the remaining items in queue_text_helper before resetting it
   skipped_rooms: >-
     {% set val = states(queue_text_helper) if queue_text_helper != 'none' else '[]' %}
     {% set skipped_ids = [] %}
     {% if val not in ['unknown', 'unavailable', '', '[]'] %}
       {% set raw = val | replace('[', '') | replace(']', '') | replace(' ', '') %}
-      {% set skipped_ids = raw.split(',') | map('int', 0) | select('gt', 0) | list %}
+      {% set skipped_ids = raw.split(',') | map('int', 0) | select('gt', 0) | reject('in', parsed_corridor_rooms) | list %}
     {% endif %}
     {% set rooms_dict = state_attr(vacuum_ent, 'rooms') %}
     {% set ns = namespace(all_rooms=[]) %}

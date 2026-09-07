@@ -21,11 +21,11 @@ blueprint:
           domain: vacuum
           integration: dreame_vacuum
     corridor_rooms:
-      name: Corridor Rooms
-      description: "Comma-separated list of room IDs that the vacuum passes through but shouldn't affect the queue (e.g., 1,5 or [1, 5])."
+      name: Corridor / Multi-Access Rooms
+      description: "Comma-separated list of room IDs that act as corridors or multi-access transit nodes the vacuum passes through to reach other rooms (e.g., [4, 6] or 4,6)."
       default: ""
       selector:
-        text:
+        text: {}
     notification_script:
       name: Notification Script
       description: "Optional script to call when a room is skipped or the cleaning cycle ends prematurely. The script will be called with a 'message' variable."
@@ -143,7 +143,16 @@ action:
 
   # Update the queue and tracking helpers based on the active segment
   - choose:
-      # Case 1: Robot is in the expected next room (highest priority)
+      # Case 1: Robot is transitioning through a corridor to reach another room (ignore pass-through)
+      - conditions:
+          - condition: template
+            value_template: >-
+              {% set non_corridor = current_queue | map('int') | reject('in', parsed_corridor_rooms) | list %}
+              {{ active_segment in parsed_corridor_rooms and non_corridor | length > 0 }}
+        sequence:
+          - stop: "Robot is in a corridor room on its way to another room, ignoring pass-through."
+
+      # Case 2: Robot is in the expected next room
       - conditions:
           - condition: template
             value_template: "{{ active_segment == current_queue[0] }}"
@@ -161,13 +170,6 @@ action:
             data:
               value: "[{{ current_queue[1:] | join(',') }}]"
 
-      # Case 2: Robot is transitioning through a corridor (ignore pass-through)
-      - conditions:
-          - condition: template
-            value_template: "{{ active_segment in parsed_corridor_rooms }}"
-        sequence:
-          - stop: "Robot is in a corridor room, ignoring pass-through."
-
       # Case 3: Robot skipped rooms and went straight to a room further down the queue
       - conditions:
           - condition: template
@@ -175,11 +177,11 @@ action:
               {% set is_undocking = trigger.from_state is defined and trigger.from_state is not none and trigger.from_state.state == 'docked' %}
               {{ not is_undocking and active_segment in current_queue }}
         sequence:
-          # Calculate skipped rooms and notify if target script is configured
+          # Calculate skipped rooms (excluding corridor pass-through nodes) and notify if target script is configured
           - variables:
-              skipped_rooms: >
+              skipped_rooms: >-
                 {% set end_index = current_queue.index(active_segment) %}
-                {% set skipped_ids = current_queue[0:end_index] | map('int') | list %}
+                {% set skipped_ids = current_queue[0:end_index] | map('int') | reject('in', parsed_corridor_rooms) | list %}
                 {% set rooms_dict = state_attr(vacuum_ent, 'rooms') %}
                 {% set ns = namespace(all_rooms=[]) %}
                 {% if rooms_dict %}
@@ -205,11 +207,13 @@ action:
               entity_id: "{{ currently_cleaned_helper }}"
             data:
               value: "{{ active_segment }}"
-          # Fast-forward the queue, removing the current and all skipped room IDs
+          # Update the queue helper: remove active segment and genuinely skipped rooms, preserving uncleaned corridor rooms
           - action: input_text.set_value
             target:
               entity_id: "{{ queue_text_helper }}"
             data:
-              value: >
-                {% set start_index = current_queue.index(active_segment) + 1 %}
-                [{{ current_queue[start_index:] | join(',') }}]
+              value: >-
+                {% set end_index = current_queue.index(active_segment) %}
+                {% set preserved_corridors = current_queue[0:end_index] | map('int') | select('in', parsed_corridor_rooms) | list %}
+                {% set remaining = preserved_corridors + current_queue[end_index + 1:] %}
+                [{{ remaining | join(',') }}]

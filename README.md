@@ -81,7 +81,7 @@ graph TD
 * **Purpose:** Handles the completion of the cleaning cycle.
   * Resets the room queue and currently cleaned helpers back to `[]` and `0`.
   * Creates a To-Do list maintenance item (e.g., "Replace water and clean the robot").
-  * Fires a custom notification script reminding you to service the dock.
+  * Fires a custom notification script reminding you to service the dock (optionally reporting any genuinely skipped rooms while ignoring corridor/transition segments).
 
 ---
 

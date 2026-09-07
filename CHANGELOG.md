@@ -16,14 +16,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 - **Reset & Notify Automation Blueprint (`vacuum_reset.yaml`):**
+  - Added optional `corridor_rooms` input to filter out transition/corridor segment IDs from remaining queue items before calculating `skipped_rooms`, preventing false verbal skip announcements when cleaning completes.
   - Added optional `vacuum_name` input to dynamically prepend explicit robot names (e.g., "The Ground Floor vacuum", "The First Floor vacuum") to completion speech announcements.
   - Added a template condition to ignore state transitions from `unavailable` or `unknown` (e.g. on integration reload) to prevent false completion triggers.
   - Added `consumable_check_script` input and mapped it to run the configured script upon cleaning completion.
   - Updated `is_vacuum_only` variable template to check the state case-insensitively, supporting vacuum-only mode comparisons regardless of the helper's text casing.
 - **Queue Manager Automation Blueprint (`vacuum_queue_manager.yaml`):**
+  - Reordered and enhanced corridor pass-through logic: when traversing a corridor node while non-corridor destination rooms are still queued, the automation ignores pass-through transitions.
+  - Updated room skipping detection (Case 3) to exclude `parsed_corridor_rooms` from `skipped_ids`, preventing transit nodes from ever being announced as skipped when destination rooms are cleaned in the robot's planned path order.
+  - Preserved uncleaned corridor rooms in the queue text helper when fast-forwarding over them, ensuring corridors remain available for cleaning at the end of the run.
   - Added optional `vacuum_name` input so room skip notifications explicitly name the target vacuum (e.g., "the Ground Floor vacuum").
 
 ### Fixed
+- **Queue Manager Automation Blueprint (`vacuum_queue_manager.yaml`):** Fixed false-positive room skipping announcements for corridor and transit rooms (e.g., first floor Corridor). Corridors are no longer dropped from the queue or announced as skipped when the robot traverses them to clean destination rooms first.
 - **Queue Manager Automation Blueprint (`vacuum_queue_manager.yaml`):** Fixed stale room skipping bug where a stale `current_segment` attribute from the previous cleaning run could cause the queue manager to immediately fast-forward and clear the new cleaning queue upon undocking.
 - **Reset & Notify Automation Blueprint (`vacuum_reset.yaml`):** Excluded transitions from `idle` state in the trigger condition to prevent false completion triggers during Home Assistant reboots and integration connection drops.
 
