@@ -12,25 +12,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Consumable Check Script Blueprint (`vacuum_check_consumables.yaml`):** New script blueprint that checks if any of the 5 vacuum consumables (main brush, side brush, filter, sensors, wheels) are under 10% life and creates task reminders on a Home Assistant To-Do list.
 - **Vacuum Abort Script Blueprint (`vacuum_abort.yaml`):** New script blueprint that clears the rooms queue helper dynamically and returns the vacuum robot to its base.
 - **Vacuum Toggle Pause Script Blueprint (`vacuum_toggle_pause.yaml`):** New script blueprint that toggles between playing and paused/error states for a vacuum robot.
-
+- **Automated Blueprint Test Suite (`tests/test_vacuum_automations.py`):** Added comprehensive 37-scenario unit test suite using `NativeEnvironment` verifying:
+  - Vacuum Reset & Queue Manager (room skipping, corridor pass-through, priority ordering, Case 3 jump-aheads with corridor preservation, undocking/mop-washing guards, restart protection, multi-map room resolution, regex discovery, TTS synthesis).
+  - Calendar Cleaning Blueprint (case-insensitive summary matching, `ignored_rooms` exclusion, null sequence defaulting, To-Do maintenance task gate, JSON queue formatting).
+  - Vacuum Scripts (missing helper discovery alerts, CleanGenius & cleaning mode branching, room selector rejection, queue parsing/empty guard, consumable threshold triggers & defaulting, abort queue clearing, toggle pause routing).
+  - Schema & Jinja Syntax Compiler (schema validation and compilation of 103+ Jinja templates across all 7 blueprints, plus compilation of 173+ templates across all 92 `ha-scripts/` files).
 
 ### Changed
-- **Reset & Notify Automation Blueprint (`vacuum_reset.yaml`):**
-  - Added optional `corridor_rooms` input to filter out transition/corridor segment IDs from remaining queue items before calculating `skipped_rooms`, preventing false verbal skip announcements when cleaning completes.
-  - Added optional `vacuum_name` input to dynamically prepend explicit robot names (e.g., "The Ground Floor vacuum", "The First Floor vacuum") to completion speech announcements.
-  - Added a template condition to ignore state transitions from `unavailable` or `unknown` (e.g. on integration reload) to prevent false completion triggers.
-  - Added `consumable_check_script` input and mapped it to run the configured script upon cleaning completion.
-  - Updated `is_vacuum_only` variable template to check the state case-insensitively, supporting vacuum-only mode comparisons regardless of the helper's text casing.
 - **Queue Manager Automation Blueprint (`vacuum_queue_manager.yaml`):**
-  - Reordered and enhanced corridor pass-through logic: when traversing a corridor node while non-corridor destination rooms are still queued, the automation ignores pass-through transitions.
-  - Updated room skipping detection (Case 3) to exclude `parsed_corridor_rooms` from `skipped_ids`, preventing transit nodes from ever being announced as skipped when destination rooms are cleaned in the robot's planned path order.
-  - Preserved uncleaned corridor rooms in the queue text helper when fast-forwarding over them, ensuring corridors remain available for cleaning at the end of the run.
-  - Added optional `vacuum_name` input so room skip notifications explicitly name the target vacuum (e.g., "the Ground Floor vacuum").
+  - Re-ordered choose cases so that **Expected Next Room** is evaluated first with highest priority before the corridor pass-through check, ensuring corridors at the head of the queue are cleanly processed and popped.
+  - Made corridor room parsing type-safe and resilient against string/integer type mismatches in Jinja filtering.
+- **Reset & Notify Automation Blueprint (`vacuum_reset.yaml`):**
+  - Resolved `TypeError` in `reject('in', parsed_corridor_rooms)` by evaluating corridor IDs as native integers in local template scope with strict whitespace stripping, ensuring configured corridor rooms (e.g. `[4, 6]`) are never falsely announced as skipped upon dock return.
 
 ### Fixed
-- **Queue Manager Automation Blueprint (`vacuum_queue_manager.yaml`):** Fixed false-positive room skipping announcements for corridor and transit rooms (e.g., first floor Corridor). Corridors are no longer dropped from the queue or announced as skipped when the robot traverses them to clean destination rooms first.
-- **Queue Manager Automation Blueprint (`vacuum_queue_manager.yaml`):** Fixed stale room skipping bug where a stale `current_segment` attribute from the previous cleaning run could cause the queue manager to immediately fast-forward and clear the new cleaning queue upon undocking.
-- **Reset & Notify Automation Blueprint (`vacuum_reset.yaml`):** Excluded transitions from `idle` state in the trigger condition to prevent false completion triggers during Home Assistant reboots and integration connection drops.
+- **Reset & Notify Automation Blueprint (`vacuum_reset.yaml`):** Fixed false-positive "could not clean corridor" speech announcement when the upstairs robot encounters closed doors in secondary bedrooms and living room.
+- **Queue Manager Automation Blueprint (`vacuum_queue_manager.yaml`):** Fixed pass-through trap where the queue manager stopped all updates whenever non-corridor rooms remained queued, preventing legitimate cleaning of corridor rooms.
 
 ## [1.1.3] - 2026-06-29
 

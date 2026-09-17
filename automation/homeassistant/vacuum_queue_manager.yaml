@@ -110,8 +110,8 @@ action:
           []
         {% endif %}
       parsed_corridor_rooms: >-
-        {% set val = corridor_rooms_input %}
-        {% if val not in ['unknown', 'unavailable', ''] %}
+        {% set val = corridor_rooms_input | default('', true) | string %}
+        {% if val not in ['unknown', 'unavailable', '', '[]', 'none'] %}
           {% set raw = val | replace('[', '') | replace(']', '') | replace(' ', '') %}
           {{ raw.split(',') | map('int', 0) | select('gt', 0) | list }}
         {% else %}
@@ -143,16 +143,7 @@ action:
 
   # Update the queue and tracking helpers based on the active segment
   - choose:
-      # Case 1: Robot is transitioning through a corridor to reach another room (ignore pass-through)
-      - conditions:
-          - condition: template
-            value_template: >-
-              {% set non_corridor = current_queue | map('int') | reject('in', parsed_corridor_rooms) | list %}
-              {{ active_segment in parsed_corridor_rooms and non_corridor | length > 0 }}
-        sequence:
-          - stop: "Robot is in a corridor room on its way to another room, ignoring pass-through."
-
-      # Case 2: Robot is in the expected next room
+      # Case 1: Robot is in the expected next room (highest priority)
       - conditions:
           - condition: template
             value_template: "{{ active_segment == current_queue[0] }}"
@@ -170,6 +161,17 @@ action:
             data:
               value: "[{{ current_queue[1:] | join(',') }}]"
 
+      # Case 2: Robot is transitioning through a corridor to reach another room (ignore pass-through)
+      - conditions:
+          - condition: template
+            value_template: >-
+              {% set c_raw = (corridor_rooms_input | default('', true) | string) | replace('[', '') | replace(']', '') | replace(' ', '') %}
+              {% set corridor_list = c_raw.split(',') | map('int', 0) | select('gt', 0) | list if c_raw != '' else [] %}
+              {% set non_corridor = current_queue | map('int') | reject('in', corridor_list) | list %}
+              {{ active_segment in corridor_list and non_corridor | length > 0 }}
+        sequence:
+          - stop: "Robot is in a corridor room on its way to another room, ignoring pass-through."
+
       # Case 3: Robot skipped rooms and went straight to a room further down the queue
       - conditions:
           - condition: template
@@ -180,15 +182,17 @@ action:
           # Calculate skipped rooms (excluding corridor pass-through nodes) and notify if target script is configured
           - variables:
               skipped_rooms: >-
-                {% set end_index = current_queue.index(active_segment) %}
-                {% set skipped_ids = current_queue[0:end_index] | map('int') | reject('in', parsed_corridor_rooms) | list %}
-                {% set rooms_dict = state_attr(vacuum_ent, 'rooms') %}
-                {% set ns = namespace(all_rooms=[]) %}
-                {% if rooms_dict %}
-                  {% for map, rooms in rooms_dict.items() %}
-                    {% set ns.all_rooms = ns.all_rooms + rooms %}
-                  {% endfor %}
-                {% endif %}
+                {%- set end_index = current_queue.index(active_segment) -%}
+                {%- set c_raw = (corridor_rooms_input | default('', true) | string) | replace('[', '') | replace(']', '') | replace(' ', '') -%}
+                {%- set corridor_list = c_raw.split(',') | map('int', 0) | select('gt', 0) | list if c_raw != '' else [] -%}
+                {%- set skipped_ids = current_queue[0:end_index] | map('int') | reject('in', corridor_list) | list -%}
+                {%- set rooms_dict = state_attr(vacuum_ent, 'rooms') -%}
+                {%- set ns = namespace(all_rooms=[]) -%}
+                {%- if rooms_dict -%}
+                  {%- for map, rooms in rooms_dict.items() -%}
+                    {%- set ns.all_rooms = ns.all_rooms + rooms -%}
+                  {%- endfor -%}
+                {%- endif -%}
                 {{ ns.all_rooms | selectattr('id', 'in', skipped_ids) | map(attribute='name') | list }}
           - if:
               - condition: template
@@ -213,7 +217,9 @@ action:
               entity_id: "{{ queue_text_helper }}"
             data:
               value: >-
-                {% set end_index = current_queue.index(active_segment) %}
-                {% set preserved_corridors = current_queue[0:end_index] | map('int') | select('in', parsed_corridor_rooms) | list %}
-                {% set remaining = preserved_corridors + current_queue[end_index + 1:] %}
+                {%- set end_index = current_queue.index(active_segment) -%}
+                {%- set c_raw = (corridor_rooms_input | default('', true) | string) | replace('[', '') | replace(']', '') | replace(' ', '') -%}
+                {%- set corridor_list = c_raw.split(',') | map('int', 0) | select('gt', 0) | list if c_raw != '' else [] -%}
+                {%- set preserved_corridors = current_queue[0:end_index] | map('int') | select('in', corridor_list) | list -%}
+                {%- set remaining = preserved_corridors + current_queue[end_index + 1:] -%}
                 [{{ remaining | join(',') }}]

@@ -100,29 +100,31 @@ variables:
   is_vacuum_only: "{{ cleaning_type_helper != 'none' and states(cleaning_type_helper) | lower == 'vacuum' }}"
 
   parsed_corridor_rooms: >-
-    {% set val = corridor_rooms_input %}
-    {% if val not in ['unknown', 'unavailable', ''] %}
-      {% set raw = val | replace('[', '') | replace(']', '') | replace(' ', '') %}
+    {%- set val = corridor_rooms_input | default('', true) | string -%}
+    {%- if val not in ['unknown', 'unavailable', '', '[]', 'none'] -%}
+      {%- set raw = val | replace('[', '') | replace(']', '') | replace(' ', '') -%}
       {{ raw.split(',') | map('int', 0) | select('gt', 0) | list }}
-    {% else %}
+    {%- else -%}
       []
-    {% endif %}
+    {%- endif -%}
 
   # Compute skipped rooms dynamically from the remaining items in queue_text_helper before resetting it
   skipped_rooms: >-
-    {% set val = states(queue_text_helper) if queue_text_helper != 'none' else '[]' %}
-    {% set skipped_ids = [] %}
-    {% if val not in ['unknown', 'unavailable', '', '[]'] %}
-      {% set raw = val | replace('[', '') | replace(']', '') | replace(' ', '') %}
-      {% set skipped_ids = raw.split(',') | map('int', 0) | select('gt', 0) | reject('in', parsed_corridor_rooms) | list %}
-    {% endif %}
-    {% set rooms_dict = state_attr(vacuum_ent, 'rooms') %}
-    {% set ns = namespace(all_rooms=[]) %}
-    {% if rooms_dict %}
-      {% for map, rooms in rooms_dict.items() %}
-        {% set ns.all_rooms = ns.all_rooms + rooms %}
-      {% endfor %}
-    {% endif %}
+    {%- set val = states(queue_text_helper) if queue_text_helper != 'none' else '[]' -%}
+    {%- set c_raw = (corridor_rooms_input | default('', true) | string) | replace('[', '') | replace(']', '') | replace(' ', '') -%}
+    {%- set corridor_list = c_raw.split(',') | map('int', 0) | select('gt', 0) | list if c_raw != '' else [] -%}
+    {%- set skipped_ids = [] -%}
+    {%- if val not in ['unknown', 'unavailable', '', '[]'] -%}
+      {%- set raw = val | replace('[', '') | replace(']', '') | replace(' ', '') -%}
+      {%- set skipped_ids = raw.split(',') | map('int', 0) | select('gt', 0) | reject('in', corridor_list) | list -%}
+    {%- endif -%}
+    {%- set rooms_dict = state_attr(vacuum_ent, 'rooms') -%}
+    {%- set ns = namespace(all_rooms=[]) -%}
+    {%- if rooms_dict -%}
+      {%- for map, rooms in rooms_dict.items() -%}
+        {%- set ns.all_rooms = ns.all_rooms + rooms -%}
+      {%- endfor -%}
+    {%- endif -%}
     {{ ns.all_rooms | selectattr('id', 'in', skipped_ids) | map(attribute='name') | list }}
 
 action:
